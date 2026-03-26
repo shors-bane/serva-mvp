@@ -37,25 +37,19 @@ const LoginPage = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        // 1. Check the role directly from the response
         const userRole = result.user?.role || 'customer';
-        
-        console.log("Login Successful. Role detected:", userRole); // Debug log
-        
-        // 2. Redirect based on Role
         if (userRole === 'technician') {
           navigate('/technician-dashboard', { replace: true });
         } else {
           navigate('/', { replace: true });
         }
-      } else {
-        clearError();
       }
+      // On failure, AuthContext has already dispatched SET_ERROR.
+      // Do NOT call clearError() here – that wipes the message before it renders.
     } catch (err) {
-      console.error('Login error:', err);
-      // Error is handled by useAuth context
+      // Unexpected JS error (not an API 4xx) – AuthContext also handles this.
     } finally {
-      setIsSubmitting(false); // CRITICAL: This ensures spinner ALWAYS stops
+      setIsSubmitting(false);
     }
   };
 
@@ -165,12 +159,14 @@ const LoginPage = () => {
             </div>
 
             <div className="mt-6">
-              <a
-                href="/signup"
+              {/* Use react-router Link so HashRouter navigation works correctly.
+                  A bare <a href> causes a full-page reload, wiping all React state. */}
+              <Link
+                to="/signup"
                 className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Create an account
-              </a>
+              </Link>
             </div>
 
             <div className="mt-4 text-center">

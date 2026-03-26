@@ -36,16 +36,16 @@ const Navigation = () => {
             </Link>
           </div>
           <div className="hidden md:flex space-x-8">
-            <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium">Home</Link>
-            
             {/* Role is sourced exclusively from AuthContext – no localStorage fallback */}
             {isAuthenticated && user?.role === 'technician' ? (
               <>
+                {/* Technicians: Job Feed is the primary anchor; no redundant Home link */}
                 <Link to="/technician-dashboard" className="text-blue-600 font-bold hover:text-blue-800">Job Feed</Link>
                 <Link to="/my-jobs" className="text-gray-600 hover:text-blue-600 font-medium">My Accepted Jobs</Link>
               </>
             ) : (
               <>
+                <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium">Home</Link>
                 <Link to="/book" className="text-gray-600 hover:text-blue-600 font-medium">Book Service</Link>
                 <Link to="/bookings" className="text-gray-600 hover:text-blue-600 font-medium">My Bookings</Link>
                 <Link to="/track" className="text-gray-600 hover:text-blue-600 font-medium">Track Repair</Link>

@@ -282,12 +282,13 @@ const SignupPage = () => {
             </div>
 
             <div className="mt-6">
-              <a
-                href="/login"
+              {/* Use Link so HashRouter navigation works; bare <a href> causes full reload */}
+              <Link
+                to="/login"
                 className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Sign in instead
-              </a>
+              </Link>
             </div>
 
             <div className="mt-6 text-center border-t pt-4">

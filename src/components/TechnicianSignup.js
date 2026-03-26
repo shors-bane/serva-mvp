@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 const TechnicianSignup = () => {
+  const navigate   = useNavigate();
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -10,7 +13,7 @@ const TechnicianSignup = () => {
     skills: []
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]         = useState('');
 
   const availableSkills = ['Smartphone', 'Laptop', 'Tablet', 'Gaming Console', 'Audio Gear'];
 
@@ -31,45 +34,27 @@ const TechnicianSignup = () => {
     setError('');
     
     try {
-      // Call the SPECIAL route directly
-      const response = await fetch('https://serva-backend.onrender.com/api/auth/register-technician', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          password: formData.password,
-          skills: formData.skills
-        })
+      // Use AuthContext.register() which handles token persistence and state update.
+      // We pass role: 'technician' so the backend's /register route assigns it correctly.
+      const result = await register({
+        firstName: formData.firstName,
+        lastName:  formData.lastName,
+        email:     formData.email,
+        phone:     formData.phone,
+        password:  formData.password,
+        role:      'technician',
+        technicianProfile: { skills: formData.skills },
       });
 
-      const result = await response.json();
       if (result.success) {
-        // 1. Force Save Credentials
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('userRole', 'technician');
-        localStorage.setItem('roleTimestamp', Date.now().toString());
-        
-        // 2. Force immediate state update by dispatching custom event
-        window.dispatchEvent(new CustomEvent('roleChanged', { 
-          detail: { role: 'technician', token: result.token } 
-        }));
-        
-        // 3. Alert the user
-        alert("Welcome to the team! Redirecting to your dashboard...");
-        
-        // 4. Force complete page reload
-        setTimeout(() => {
-          window.location.href = '/technician-dashboard?refresh=' + Date.now();
-        }, 200);
+        // AuthContext has already updated state + localStorage token.
+        // navigate() triggers a React Router transition; no page reload needed.
+        navigate('/technician-dashboard', { replace: true });
       } else {
-        setError(result.message || 'Registration failed');
+        setError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
-      console.error(err);
-      setError('Network error. Try again.');
+      setError('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }

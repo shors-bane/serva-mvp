@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext';
 
 const BookingWizard = () => {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, logout } = useAuth();    // token from context only – no localStorage fallback
   const [currentStep, setCurrentStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [diagnosis, setDiagnosis] = useState(null);
+  const [isLoading, setIsLoading]     = useState(false);
+  const [submitError, setSubmitError] = useState(null); // inline error state instead of alert()
+  const [diagnosis, setDiagnosis]     = useState(null); // AI analysis result from step 3
   const [bookingData, setBookingData] = useState({
     deviceType: '',
     issue: '',
@@ -99,105 +100,60 @@ const BookingWizard = () => {
   };
 
   const handleSubmit = async () => {
-    // Get token from context or localStorage fallback
-    const authToken = token || localStorage.getItem('token');
-    
-    // Check if user is authenticated
-    if (!authToken) {
-      alert('Please log in to book a repair');
+    if (!token) {
       navigate('/login');
       return;
     }
 
     setIsLoading(true);
+    setSubmitError(null);
     
     try {
-      console.log('Starting booking submission...');
-      console.log('Booking data:', bookingData);
-      console.log('Using token:', authToken ? 'Present' : 'Missing');
-      
       const formData = new FormData();
-      formData.append('deviceType', bookingData.deviceType);
-      formData.append('issue', bookingData.issue);
+      formData.append('deviceType',    bookingData.deviceType);
+      formData.append('issue',         bookingData.issue);
       formData.append('preferredTime', bookingData.preferredTime);
-      formData.append('address', bookingData.address);
+      formData.append('address',       bookingData.address);
       
       if (bookingData.issue === 'other' && bookingData.customIssueDescription) {
         formData.append('customIssueDescription', bookingData.customIssueDescription);
       }
-      
       if (bookingData.photo) {
         formData.append('photo', bookingData.photo);
       }
 
       const apiUrl = process.env.REACT_APP_API_URL || 'https://serva-backend.onrender.com';
-      console.log('Sending request to:', `${apiUrl}/api/v1/bookings`);
-      console.log('Auth token available:', !!authToken);
-      console.log('FormData contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value);
-      }
-
       const response = await fetch(`${apiUrl}/api/v1/bookings`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-          // Note: Do NOT set Content-Type for FormData, let the browser handle it
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      const result = await response.json();
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Booking Result:', result);
-        
-        // FIX: Extract ID from the nested 'booking' object
-        // Check for 'bookingId' (custom) OR '_id' (MongoDB) OR 'id'
-        const bookingData = result.booking || {};
-        const trackingId = bookingData.bookingId || bookingData._id || result.bookingId;
+      if (response.ok && result.success) {
+        const created    = result.booking || {};
+        const trackingId = created.bookingId || created._id;
 
-        if (trackingId) {
-          // Clear form and redirect
-          localStorage.removeItem('bookingStep');
-          localStorage.removeItem('bookingData');
-          navigate(`/track?id=${trackingId}`);
-        } else {
-          console.error('ID Missing in response:', result);
-          alert('Booking successful, but could not retrieve ID. Please check "My Bookings".');
-          navigate('/repairs');
-        }
-        
-        // Reset form
+        localStorage.removeItem('bookingStep');
+        localStorage.removeItem('bookingData');
+
+        // Reset wizard state
         setCurrentStep(1);
-        setBookingData({
-          deviceType: '',
-          issue: '',
-          customIssueDescription: '',
-          photo: null,
-          preferredTime: '',
-          address: '',
-        });
+        setBookingData({ deviceType: '', issue: '', customIssueDescription: '', photo: null, preferredTime: '', address: '' });
+
+        navigate(trackingId ? `/track?id=${trackingId}` : '/bookings');
+
+      } else if (response.status === 401 || response.status === 403) {
+        // Token expired / revoked – log out cleanly via AuthContext
+        await logout();
+        navigate('/login', { replace: true });
+
       } else {
-        // Check for 403 Unauthorized (expired/invalid token)
-        if (response.status === 403) {
-          // Clear expired authentication data
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          
-          window.location.href = '/login';
-          return;
-        }
-        
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Server error response:', errorData);
-        alert(`Booking failed: ${errorData.message || 'Server error. Please try again.'}`);
+        setSubmitError(result.message || 'Booking failed. Please try again.');
       }
-    } catch (error) {
-      console.error('Network/JavaScript error:', error);
-      alert(`Error submitting booking: ${error.message || 'Network error. Please try again.'}`);
+    } catch {
+      setSubmitError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -405,6 +361,13 @@ const BookingWizard = () => {
               </div>
             </div>
             
+            {/* Inline error display – replaces alert() calls */}
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
+                <strong>Error:</strong> {submitError}
+              </div>
+            )}
+            
             {isLoading && (
               <div className="flex flex-col items-center justify-center p-8 bg-blue-50 rounded-xl border border-blue-100 mb-6">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
@@ -495,14 +458,14 @@ const BookingWizard = () => {
         {renderStepContent()}
       </div>
 
-      {/* Navigation */}
+      {/* Navigation – also disable Next while AI analysis is in flight on step 3 */}
       {currentStep < 5 && (
         <div className="px-6 pb-6 flex justify-between">
           <button
             onClick={handlePrevious}
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isLoading}
             className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              currentStep === 1
+              currentStep === 1 || isLoading
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
@@ -511,14 +474,14 @@ const BookingWizard = () => {
           </button>
           <button
             onClick={handleNext}
-            disabled={isNextDisabled()}
+            disabled={isNextDisabled() || isLoading}
             className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              isNextDisabled()
+              isNextDisabled() || isLoading
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-brand text-white hover:bg-opacity-90'
             }`}
           >
-            Next
+            {isLoading ? 'Analyzing…' : 'Next'}
           </button>
         </div>
       )}

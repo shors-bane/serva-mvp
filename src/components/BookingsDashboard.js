@@ -5,26 +5,31 @@ import { useAuth } from '../context/AuthContext';
 const BookingsDashboard = () => {
   const { token } = useAuth();
   const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'https://serva-backend.onrender.com';
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const response = await fetch('https://serva-backend.onrender.com/api/v1/bookings', {
+        const response = await fetch(`${API_URL}/api/v1/bookings`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         if (data.success) {
           setBookings(data.bookings || []);
+        } else {
+          setFetchError(data.message || 'Failed to load bookings');
         }
-      } catch (error) {
-        console.error("Failed to load bookings", error);
+      } catch {
+        setFetchError('Network error. Please refresh to try again.');
       } finally {
         setLoading(false);
       }
     };
     if (token) fetchBookings();
-  }, [token]);
+  }, [token, API_URL]);
 
   // 🛡️ SAFETY FUNCTION: This prevents the crash.
   const renderTechnician = (tech) => {
@@ -57,7 +62,26 @@ const BookingsDashboard = () => {
     }
   };
 
-  if (loading) return "Loading your dashboard...";
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading your bookings…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-800 text-sm">
+          <strong>Error:</strong> {fetchError}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
@@ -135,15 +159,14 @@ const BookingsDashboard = () => {
                 </span>
               </div>
 
-              {/* Actions */}
               <div className="mt-4 pt-4 border-t flex justify-between items-center">
                 <Link to="/track" className="text-blue-600 text-sm hover:underline">Track Status</Link>
+                {/* Use API_URL so this works in all environments (local dev + production) */}
                 <a 
-                  href={`/api/v1/bookings/${booking._id}/certificate`} 
+                  href={`${API_URL}/api/v1/bookings/${booking._id}/certificate`} 
                   target="_blank" 
                   rel="noreferrer" 
                   className="text-gray-500 text-sm hover:text-blue-600"
-                  onClick={() => console.log('📄 Certificate clicked for booking:', booking._id)}
                 >
                   View Certificate
                 </a>
