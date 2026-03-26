@@ -71,28 +71,55 @@ const SignupPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
-    
+
     try {
+      // Strip confirmPassword – backend doesn't need it.
       const { confirmPassword, ...userData } = formData;
+
+      // AuthContext.register() calls fetch internally and returns
+      // { success: true, user } on 2xx or { success: false, error: string } on failure.
       const result = await register(userData);
-      
+
       if (result.success) {
-        // Redirect to homepage after successful signup
-        navigate('/'); // FORCE REDIRECT immediately
-      } else {
-        clearError();
+        // AuthContext already persisted the token and updated auth state.
+        // Navigate to the customer home/dashboard.
+        navigate('/', { replace: true });
+        return; // early return is safe; finally still runs
       }
+
+      // ── Failure path ──────────────────────────────────────────────────────
+      // The backend's Zod middleware returns { errors: string[] } on 400.
+      // AuthContext.register() surfaces this in result.error as a joined string,
+      // but we also check for an errors array in case the caller passes it through.
+      const backendErrors = result.errors;          // array from Zod (if forwarded)
+      const backendMessage = result.error           // string from AuthContext wrapper
+                          || result.message         // fallback label
+                          || 'Registration failed. Please try again.';
+
+      if (Array.isArray(backendErrors) && backendErrors.length > 0) {
+        // Display each Zod field error in the existing validation banner.
+        setValidationErrors(backendErrors);
+      } else {
+        // Display the single error string in the same banner.
+        setValidationErrors([backendMessage]);
+      }
+      // Do NOT call clearError() here – that would wipe the context error
+      // before it could be read, causing the silent-failure / infinite spinner.
+
     } catch (err) {
-      console.error('Registration error:', err);
-      // Error is handled by useAuth context
+      // Unexpected JS / network error (not a structured API response).
+      setValidationErrors([
+        err?.message || 'An unexpected error occurred. Please try again.',
+      ]);
     } finally {
-      setIsSubmitting(false); // CRITICAL: This ensures spinner ALWAYS stops
+      // ALWAYS runs – this is the only place that resets the spinner.
+      // Placing setIsSubmitting(false) here (and nowhere else) prevents
+      // any code path from leaving the button stuck in "Creating account…"
+      setIsSubmitting(false);
     }
   };
 
