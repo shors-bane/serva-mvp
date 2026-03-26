@@ -1,14 +1,18 @@
 require('dotenv').config();
-const express = require('express');
+const express  = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-// Import Routes (Ensure these files exist)
-const authRoutes = require('./routes/auth');
+const cors     = require('cors');
+const path     = require('path');
+const fs       = require('fs');
+const QRCode   = require('qrcode');
+
+// Routes & middleware
+const authRoutes            = require('./routes/auth');
 const { authenticateToken } = require('./middleware/auth');
-const Booking = require('./models/Booking');
+const errorHandler          = require('./middleware/errorHandler');
+const { validateBooking }   = require('./middleware/validateBooking');
+const { analyzeIssue }      = require('./controllers/aiController');
+const Booking               = require('./models/Booking');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,58 +43,65 @@ const upload = multer({ storage });
 // 4. Static Files
 app.use('/uploads', express.static(uploadDir));
 
-// 📜 Certificate Route (Public & Top Priority)
-app.get('/api/v1/bookings/:id/certificate', async (req, res) => {
+/**
+ * GET /api/v1/bookings/:id/certificate
+ *
+ * Returns a JSON payload containing a QR Data URL and booking metadata.
+ * The frontend is responsible for rendering the warranty card UI;
+ * the backend no longer sends raw HTML (separation of concerns).
+ *
+ * QR content: a verification URL the customer can scan to view their booking.
+ * All errors are forwarded to the global errorHandler via next(err).
+ */
+app.get('/api/v1/bookings/:id/certificate', async (req, res, next) => {
   try {
-    console.log('📄 Certificate request for booking ID:', req.params.id);
-    
     const booking = await Booking.findById(req.params.id)
-      .populate('user', 'firstName lastName email phone')
+      .populate('user',       'firstName lastName email phone')
       .populate('technician', 'firstName lastName email');
-      
-    console.log('📄 Booking found:', booking ? 'YES' : 'NO');
-    
+
     if (!booking) {
-      console.log('❌ Certificate: Booking not found');
-      return res.status(404).send(`
-        <html>
-          <head><title>Certificate Not Found</title></head>
-          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-            <h1 style="color: #dc2626;">❌ Certificate Not Found</h1>
-            <p>The requested booking certificate could not be found.</p>
-            <p>Please check your booking ID and try again.</p>
-          </body>
-        </html>
-      `);
+      const err = new Error('Certificate not found for this booking');
+      err.statusCode = 404;
+      return next(err);
     }
 
-    console.log('📄 Certificate data:', {
-      bookingId: booking.bookingId || booking._id,
-      deviceType: booking.deviceType,
-      issue: booking.issue,
-      technician: booking.technician ? booking.technician.firstName : 'Serva Pro'
+    // Build the verification URL embedded in the QR code.
+    const baseUrl        = process.env.FRONTEND_URL || 'https://serva-mvp.vercel.app';
+    const verificationUrl = `${baseUrl}/#/track?id=${booking.bookingId || booking._id}`;
+
+    // Generate QR as a base64 Data URL using the promise API (no callbacks).
+    const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
+      errorCorrectionLevel: 'M',
+      margin:  2,
+      width:   256,
+      color:   { dark: '#1d4ed8', light: '#ffffff' },
     });
 
-    // Simple working HTML Certificate (no QR code for now)
-    const html = '<!DOCTYPE html><html><head><title>Serva Digital Warranty - ' + (booking.bookingId || booking._id) + '</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f8fafc}.certificate{max-width:800px;margin:0 auto;background:white;border:3px solid #3b82f6;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.1);overflow:hidden}.header{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;padding:30px;text-align:center}.header h1{margin:0;font-size:2.5em;font-weight:700}.header p{margin:10px 0 0 0;opacity:0.9;font-size:1.1em}.content{padding:40px}.repair-details{background:#f1f5f9;padding:25px;border-radius:8px;margin:20px 0;border-left:4px solid #3b82f6}.repair-details h2{margin:0 0 15px 0;color:#1e293b;font-size:1.4em}.detail-row{display:flex;justify-content:space-between;margin:10px 0;padding:8px 0;border-bottom:1px solid #e2e8f0}.detail-label{font-weight:600;color:#475569}.detail-value{color:#1e293b;font-weight:500}.warranty{background:linear-gradient(135deg,#10b981,#059669);color:white;padding:20px;border-radius:8px;text-align:center;margin:25px 0}.warranty h3{margin:0;font-size:1.3em}.footer{text-align:center;padding:20px;background:#f1f5f9;color:#64748b;font-size:0.9em}@media print{body{padding:0}.certificate{box-shadow:none}}</style></head><body><div class="certificate"><div class="header"><h1>🔧 Serva Digital Warranty</h1><p>Official Device Repair Certification</p></div><div class="content"><div class="repair-details"><h2>📱 ' + (booking.deviceType ? booking.deviceType.toUpperCase() : 'DEVICE') + ' Repair</h2><div class="detail-row"><span class="detail-label">Booking Reference:</span><span class="detail-value">' + (booking.bookingId || booking._id) + '</span></div><div class="detail-row"><span class="detail-label">Issue Fixed:</span><span class="detail-value">' + (booking.issue || 'General Repair') + '</span></div><div class="detail-row"><span class="detail-label">Service Date:</span><span class="detail-value">' + (booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A') + '</span></div><div class="detail-row"><span class="detail-label">Technician:</span><span class="detail-value">' + (booking.technician ? booking.technician.firstName + ' ' + booking.technician.lastName : 'Serva Certified Pro') + '</span></div><div class="detail-row"><span class="detail-label">Customer:</span><span class="detail-value">' + (booking.user ? booking.user.firstName + ' ' + booking.user.lastName : 'N/A') + '</span></div></div><div class="warranty"><h3>🛡️ 6-Month Warranty Active</h3><p>This repair is covered under our comprehensive warranty</p></div></div><div class="footer"><p><strong>Serva Digital Repair Services</strong></p><p>Verified by Serva Protocol • Generated on ' + new Date().toLocaleDateString() + '</p></div></div></body></html>';
-    
-    console.log('📄 Certificate HTML generated successfully');
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
-  } catch (error) { 
-    console.error('❌ Certificate Error:', error);
-    console.error('❌ Full Error Stack:', error.stack);
-    res.status(500).send(`
-      <html>
-        <head><title>Certificate Error</title></head>
-        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-          <h1 style="color: #dc2626;">❌ Certificate Generation Error</h1>
-          <p>We encountered an error generating your certificate.</p>
-          <p>Please try again or contact support.</p>
-          <p style="font-size: 0.8em; color: #666;">Error: ${error.message}</p>
-        </body>
-      </html>
-    `); 
+    // Return clean, typed JSON – the frontend renders the certificate card.
+    return res.json({
+      success: true,
+      certificate: {
+        bookingId:        booking.bookingId || booking._id.toString(),
+        deviceType:       booking.deviceType  || 'Device',
+        brand:            booking.brand        || '',
+        issue:            booking.issue        || 'General Repair',
+        status:           booking.status,
+        serviceDate:      booking.createdAt,
+        warrantyMonths:   6,
+        technician: booking.technician
+          ? `${booking.technician.firstName} ${booking.technician.lastName}`.trim()
+          : 'Serva Certified Pro',
+        customer: booking.user
+          ? `${booking.user.firstName} ${booking.user.lastName}`.trim()
+          : 'N/A',
+        qrDataUrl,          // Data URL safe for <img src> – no CORS issues
+        verificationUrl,    // Plain URL for copy-paste / link display
+        generatedAt:        new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    // Delegate to the central errorHandler (handles CastError for bad IDs too).
+    next(err);
   }
 });
 
@@ -226,47 +237,10 @@ app.get('/api/v1/ai-models', async (req, res) => {
   }
 });
 
-// 🤖 AI Analysis Route (Fail-Safe)
-app.post('/api/v1/analyze-issue', authenticateToken, upload.single('photo'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, message: "No image uploaded" });
-    try {
-      // 1. Try to use Google AI (Gemini 2.5 Flash is the current working model)
-      if (!process.env.GEMINI_API_KEY) throw new Error("No API Key configured");
-      
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const prompt = `Analyze this device repair issue. Return JSON: { "issue": "string", "severity": "string", "advice": "string" }`;
-      const imagePart = {
-        inlineData: {
-          data: fs.readFileSync(req.file.path).toString("base64"),
-          mimeType: req.file.mimetype
-        },
-      };
-      const result = await model.generateContent([prompt, imagePart]);
-      const response = await result.response;
-      const text = response.text().replace(/```json|```/g, '').trim();
-      
-      // Success!
-      res.json({ success: true, diagnosis: JSON.parse(text) });
-    } catch (aiError) {
-      console.error("⚠️ AI Failed (Switching to Manual Mode):", aiError.message);
-      
-      // 2. FALLBACK: Return a dummy diagnosis so the app DOES NOT CRASH
-      res.json({ 
-        success: true, 
-        diagnosis: { 
-          issue: "Manual Inspection Required", 
-          severity: "Moderate", 
-          advice: "Our technician will diagnose the specific issue upon arrival." 
-        } 
-      });
-    }
-  } catch (error) { 
-    console.error("Server Error:", error); 
-    res.status(500).json({ success: false, message: "Server Error" }); 
-  }
-});
+// 🤖 AI Analysis Route – delegates entirely to aiController for clean separation.
+// The controller handles timeout, Gemini errors, and returns { fallbackRequired: true }
+// on any failure so the frontend can switch to manual input mode.
+app.post('/api/v1/analyze-issue', authenticateToken, upload.single('photo'), analyzeIssue);
 
 // 👨‍🔧 Technician: Available Jobs
 app.get('/api/v1/technician/available-jobs', authenticateToken, async (req, res) => {
@@ -330,34 +304,30 @@ app.get('/api/v1/bookings/technician/my-jobs', authenticateToken, async (req, re
 
 app.use('/api/auth', authRoutes);
 
-// Create Booking (Sanitized)
-app.post('/api/v1/bookings', authenticateToken, upload.single('photo'), async (req, res) => {
+// Create Booking – validateBooking runs Zod schema before the handler.
+// Any validation failure is forwarded to errorHandler via next(err) inside the middleware.
+app.post('/api/v1/bookings', authenticateToken, upload.single('photo'), validateBooking, async (req, res, next) => {
   try {
+    // req.body is already Zod-parsed (clean, typed, client-injected fields stripped).
     const bookingData = { ...req.body };
 
-    // Sanitization
-    delete bookingData.technician; 
-    delete bookingData.status;
-    bookingData.user = req.user.id || req.user._id;
-    bookingData.status = 'pending';
+    // Authoritative server-side fields – always override whatever the client sent.
+    bookingData.user       = req.user.id || req.user._id;
+    bookingData.status     = 'pending';
     bookingData.technician = null;
 
     if (req.file) {
-      // Store the full path for easier frontend retrieval
-      // Note: We strip the /tmp/ prefix if on Render, or keep simple path
-      const filename = path.basename(req.file.path);
-      bookingData.photo = `/uploads/${filename}`;
+      const filename        = path.basename(req.file.path);
+      bookingData.photo     = `/uploads/${filename}`;
     }
 
     const newBooking = new Booking(bookingData);
     await newBooking.save();
 
     res.status(201).json({ success: true, message: 'Booking created', booking: newBooking });
-
-
-  } catch (error) {
-    console.error("❌ Booking Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+  } catch (err) {
+    // Includes Mongoose ValidationError – errorHandler classifies it to 400.
+    next(err);
   }
 });
 
@@ -437,11 +407,16 @@ app.get('/api/v1/bookings/technician/my-jobs', authenticateToken, async (req, re
 });
 
 // ==========================================
-// 🛑 ERROR HANDLERS (MUST BE LAST)
+// 🛑 FALLTHROUGH & ERROR HANDLERS (MUST BE LAST)
 // ==========================================
 
+// 404 – No route matched
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.url}` });
 });
+
+// Global error handler – must have 4 params so Express treats it as error middleware.
+// Handles Mongoose, JWT, validation, and generic 500 errors with a consistent JSON shape.
+app.use(errorHandler);
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

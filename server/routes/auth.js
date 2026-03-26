@@ -210,21 +210,23 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me - Get current user info
+// IMPORTANT: must include `role` so AuthContext.hydrateFromToken() can
+// correctly populate user.role in React state on page refresh.
 router.get('/me', authenticateToken, (req, res) => {
-  // The middleware will add req.user
   res.status(200).json({
     success: true,
     data: {
       user: {
-        id: req.user.id,
-        email: req.user.email,
+        id:        req.user.id,
+        email:     req.user.email,
         firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        phone: req.user.phone,
-        isActive: req.user.isActive,
-        isAdmin: req.user.isAdmin
-      }
-    }
+        lastName:  req.user.lastName,
+        phone:     req.user.phone,
+        role:      req.user.role,      // ← required by AuthContext hydration
+        isActive:  req.user.isActive,
+        isAdmin:   req.user.isAdmin,
+      },
+    },
   });
 });
 

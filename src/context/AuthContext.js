@@ -1,366 +1,265 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 
-// Initial state
+// ─── Constants ────────────────────────────────────────────────────────────────
+const API_URL = process.env.REACT_APP_API_URL || 'https://serva-backend.onrender.com';
+
+// Single source of truth for auth state shape.
+// We deliberately do NOT optimistically read userRole from localStorage here;
+// role is derived from the decoded JWT returned by the /me endpoint so there
+// is no mismatch between token claims and localStorage.
 const initialState = {
-  user: null,
-  token: localStorage.getItem('token'),
+  user: null,          // Full user object from API
+  token: null,         // Raw JWT string
   isAuthenticated: false,
-  isLoading: true,
-  error: null
+  isLoading: true,     // true until hydration resolves on mount
+  error: null,
 };
 
-// Action types
+// ─── Reducer ─────────────────────────────────────────────────────────────────
 const AUTH_ACTIONS = {
-  LOGIN_START: 'LOGIN_START',
-  LOGIN_SUCCESS: 'LOGIN_SUCCESS',
-  LOGIN_FAILURE: 'LOGIN_FAILURE',
-  LOGOUT: 'LOGOUT',
-  REGISTER_START: 'REGISTER_START',
-  REGISTER_SUCCESS: 'REGISTER_SUCCESS',
-  REGISTER_FAILURE: 'REGISTER_FAILURE',
-  LOAD_USER_START: 'LOAD_USER_START',
-  LOAD_USER_SUCCESS: 'LOAD_USER_SUCCESS',
-  LOAD_USER_FAILURE: 'LOAD_USER_FAILURE',
-  CLEAR_ERROR: 'CLEAR_ERROR'
+  HYDRATE_START:  'HYDRATE_START',
+  HYDRATE_SUCCESS:'HYDRATE_SUCCESS',
+  HYDRATE_FAILURE:'HYDRATE_FAILURE',
+  LOGIN_SUCCESS:  'LOGIN_SUCCESS',
+  LOGOUT:         'LOGOUT',
+  UPDATE_USER:    'UPDATE_USER',
+  CLEAR_ERROR:    'CLEAR_ERROR',
+  SET_ERROR:      'SET_ERROR',
 };
 
-// Reducer function
 const authReducer = (state, action) => {
   switch (action.type) {
-    case AUTH_ACTIONS.LOGIN_START:
-    case AUTH_ACTIONS.REGISTER_START:
-    case AUTH_ACTIONS.LOAD_USER_START:
-      return {
-        ...state,
-        isLoading: true,
-        error: null
-      };
+    case AUTH_ACTIONS.HYDRATE_START:
+      return { ...state, isLoading: true, error: null };
 
+    case AUTH_ACTIONS.HYDRATE_SUCCESS:
     case AUTH_ACTIONS.LOGIN_SUCCESS:
-    case AUTH_ACTIONS.REGISTER_SUCCESS:
-    case AUTH_ACTIONS.LOAD_USER_SUCCESS:
       return {
         ...state,
         user: action.payload.user,
         token: action.payload.token,
         isAuthenticated: true,
         isLoading: false,
-        error: null
+        error: null,
       };
 
-    case AUTH_ACTIONS.LOGIN_FAILURE:
-    case AUTH_ACTIONS.REGISTER_FAILURE:
-    case AUTH_ACTIONS.LOAD_USER_FAILURE:
-      return {
-        ...state,
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: action.payload
-      };
+    case AUTH_ACTIONS.HYDRATE_FAILURE:
+      // Token was present but invalid / network down – clear everything cleanly.
+      return { ...initialState, isLoading: false };
 
     case AUTH_ACTIONS.LOGOUT:
-      return {
-        ...state,
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null
-      };
+      return { ...initialState, isLoading: false };
+
+    case AUTH_ACTIONS.UPDATE_USER:
+      return { ...state, user: { ...state.user, ...action.payload } };
+
+    case AUTH_ACTIONS.SET_ERROR:
+      return { ...state, error: action.payload, isLoading: false };
 
     case AUTH_ACTIONS.CLEAR_ERROR:
-      return {
-        ...state,
-        error: null
-      };
+      return { ...state, error: null };
 
     default:
       return state;
   }
 };
 
-// Create context
-const AuthContext = createContext();
+// ─── Context ──────────────────────────────────────────────────────────────────
+const AuthContext = createContext(null);
 
-// API base URL
-const API_URL = process.env.REACT_APP_API_URL || 'https://serva-backend.onrender.com';
-
-// Auth provider component
+// ─── Provider ─────────────────────────────────────────────────────────────────
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Set auth token in headers
-  const setAuthToken = (token) => {
+  /**
+   * Persist or remove the JWT from localStorage.
+   * This is the ONLY place we touch localStorage for tokens.
+   */
+  const persistToken = (token) => {
     if (token) {
       localStorage.setItem('token', token);
     } else {
       localStorage.removeItem('token');
-      localStorage.removeItem('userRole'); // Also clear role on logout
     }
   };
 
-  // Load user from token
-  const loadUser = useCallback(async () => {
+  /**
+   * Hydrate auth state from an existing JWT in localStorage.
+   *
+   * Architecture decision: we always validate the token against the /me
+   * endpoint on mount.  This handles the case where the token has been
+   * revoked or the user was deactivated server-side.  We accept the ~200ms
+   * loading state (spinner in ProtectedRoute) as the correct UX rather than
+   * showing stale optimistic data that then crashes.
+   */
+  const hydrateFromToken = useCallback(async () => {
     const token = localStorage.getItem('token');
-    const storedRole = localStorage.getItem('userRole'); // Read backup role
-    
+
+    // No token → resolve immediately as unauthenticated.
     if (!token) {
-      dispatch({ type: AUTH_ACTIONS.LOAD_USER_FAILURE, payload: 'No token found' });
+      dispatch({ type: AUTH_ACTIONS.HYDRATE_FAILURE });
       return;
     }
 
+    dispatch({ type: AUTH_ACTIONS.HYDRATE_START });
+
     try {
-      dispatch({ type: AUTH_ACTIONS.LOAD_USER_START });
-
-      // Optimistically set user with the stored role while we wait for the API
-      if (storedRole) {
-        dispatch({
-          type: AUTH_ACTIONS.LOAD_USER_SUCCESS,
-          payload: {
-            user: { role: storedRole },
-            token
-          }
-        });
-      }
-
       const response = await fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        // Update with full user data from API
+      if (response.ok && data.success) {
         dispatch({
-          type: AUTH_ACTIONS.LOAD_USER_SUCCESS,
-          payload: {
-            user: data.data.user,
-            token
-          }
+          type: AUTH_ACTIONS.HYDRATE_SUCCESS,
+          payload: { user: data.data.user, token },
         });
-        // Update stored role with latest from API
-        localStorage.setItem('userRole', data.data.user.role);
       } else {
-        dispatch({ type: AUTH_ACTIONS.LOAD_USER_FAILURE, payload: data.message });
-        setAuthToken(null);
-        localStorage.removeItem('userRole');
+        // Token rejected by server (expired, invalid, user deleted).
+        persistToken(null);
+        dispatch({ type: AUTH_ACTIONS.HYDRATE_FAILURE });
       }
-    } catch (error) {
-      // If API fails but we have a stored role, keep the optimistic user
-      if (!storedRole) {
-        dispatch({ type: AUTH_ACTIONS.LOAD_USER_FAILURE, payload: 'Network error' });
-        setAuthToken(null);
-      }
+    } catch {
+      // Network error: we cannot confirm the token is valid.
+      // Fail secure – clear state until next successful verification.
+      persistToken(null);
+      dispatch({ type: AUTH_ACTIONS.HYDRATE_FAILURE });
     }
   }, []);
 
-  // Login function
+  // Run hydration exactly once on initial mount.
+  useEffect(() => {
+    hydrateFromToken();
+  }, [hydrateFromToken]);
+
+  // ─── Auth Actions ───────────────────────────────────────────────────────────
+
+  /**
+   * Email / password login.
+   * Returns { success: true, user } or { success: false, error: string }.
+   */
   const login = async (email, password) => {
+    if (!email || !password) {
+      const error = 'Email and password are required';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+      return { success: false, error };
+    }
+
+    dispatch({ type: AUTH_ACTIONS.HYDRATE_START }); // reuse loading flag
+
     try {
-      dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-
-      // Validate inputs
-      if (!email || !password) {
-        dispatch({ 
-          type: AUTH_ACTIONS.LOGIN_FAILURE, 
-          payload: 'Email and password are required' 
-        });
-        return { success: false, error: 'Email and password are required' };
-      }
-
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        // 1. Force Save to LocalStorage (Persist across refresh)
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('userRole', data.user.role); 
-        
-        // 2. Update State using dispatch
+      if (response.ok && data.success) {
+        persistToken(data.token);
         dispatch({
           type: AUTH_ACTIONS.LOGIN_SUCCESS,
-          payload: {
-            user: data.user,
-            token: data.token
-          }
+          payload: { user: data.user, token: data.token },
         });
-        
         return { success: true, user: data.user };
-      } else {
-        dispatch({ 
-          type: AUTH_ACTIONS.LOGIN_FAILURE, 
-          payload: data.message || 'Login failed' 
-        });
-        return { success: false, error: data.message || 'Login failed' };
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      let errorMessage = 'Network error. Please try again.';
-      
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = 'Network connection failed. Please check your internet.';
-      } else if (error.name === 'AbortError') {
-        errorMessage = 'Request timed out. Please try again.';
-      }
-      
-      dispatch({ 
-        type: AUTH_ACTIONS.LOGIN_FAILURE, 
-        payload: errorMessage 
-      });
-      return { success: false, error: errorMessage };
+
+      const error = data.message || 'Login failed';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+      return { success: false, error };
+    } catch (err) {
+      const error =
+        err.name === 'AbortError'
+          ? 'Request timed out. Please try again.'
+          : 'Network error. Please check your connection.';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+      return { success: false, error };
     }
   };
 
+  /**
+   * New user registration.
+   */
   const register = async (userData) => {
-  try {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    });
-    const data = await response.json();
-    if (data.success) {
-      // FIX: Handle both flat 'token' and nested 'data.token' patterns to be safe
-      const token = data.token || (data.data && data.data.token);
-      const user = data.user || (data.data && data.data.user);
-      if (token) {
-        setAuthToken(token);
-        // CRITICAL: Save the role to localStorage too, as a backup
-        localStorage.setItem('userRole', user.role);
-        
-        dispatch({
-          type: AUTH_ACTIONS.REGISTER_SUCCESS,
-          payload: {
-            token,
-            user
-          }
-        });
-        return { success: true, user }; // Return user for redirection logic
-      }
-    }
-    return { success: false, message: data.message || 'Registration failed' };
-  } catch (error) { 
-    console.error('Registration Error:', error); 
-    return { success: false, message: 'Network error during registration' }; 
-  }
-};
+    dispatch({ type: AUTH_ACTIONS.HYDRATE_START });
 
-  // Logout function
-  const logout = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const token = data.token || data.data?.token;
+        const user  = data.user  || data.data?.user;
+
+        if (token && user) {
+          persistToken(token);
+          dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user, token } });
+          return { success: true, user };
+        }
+      }
+
+      const error = data.message || 'Registration failed';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+      return { success: false, error };
+    } catch {
+      const error = 'Network error during registration';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+      return { success: false, error };
+    }
+  };
+
+  /**
+   * Logout – always clear local state even if the server call fails.
+   */
+  const logout = async () => {
+    const token = localStorage.getItem('token');
+    try {
       if (token) {
         await fetch(`${API_URL}/api/auth/logout`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { Authorization: `Bearer ${token}` },
         });
       }
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
+      // Best-effort server logout; client state is cleared regardless.
     } finally {
-      setAuthToken(null);
+      persistToken(null);
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     }
   };
 
-  // Update profile function
-  const updateProfile = async (profileData) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/auth/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        dispatch({
-          type: AUTH_ACTIONS.LOAD_USER_SUCCESS,
-          payload: {
-            user: data.data.user,
-            token
-          }
-        });
-        return { success: true };
-      } else {
-        return { success: false, error: data.message };
-      }
-    } catch (error) {
-      return { success: false, error: 'Network error' };
-    }
+  /**
+   * Patch user fields in state after a successful profile update.
+   * The calling component is responsible for the API call.
+   */
+  const updateUser = (updatedFields) => {
+    dispatch({ type: AUTH_ACTIONS.UPDATE_USER, payload: updatedFields });
   };
 
-  // Clear error
   const clearError = () => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   };
-
-  // Load user on mount
-  useEffect(() => {
-    loadUser();
-    
-    // Listen for custom role change events
-    const handleRoleChange = (event) => {
-      const { role, token } = event.detail;
-      console.log('🔄 Role change event received:', { role, token });
-      
-      // Update state immediately
-      dispatch({
-        type: AUTH_ACTIONS.LOAD_USER_SUCCESS,
-        payload: {
-          user: { role },
-          token
-        }
-      });
-      
-      // Update localStorage
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('token', token);
-    };
-    
-    window.addEventListener('roleChanged', handleRoleChange);
-    
-    return () => {
-      window.removeEventListener('roleChanged', handleRoleChange);
-    };
-  }, [loadUser]);
 
   const value = {
     ...state,
     login,
     register,
     logout,
-    updateProfile,
+    updateUser,
     clearError,
-    loadUser
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom hook to use auth context
+// ─── Hook ──────────────────────────────────────────────────────────────────────
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

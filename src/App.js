@@ -38,8 +38,8 @@ const Navigation = () => {
           <div className="hidden md:flex space-x-8">
             <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium">Home</Link>
             
-            {/* Only check role if user is authenticated */}
-            {isAuthenticated && (user?.role === 'technician' || localStorage.getItem('userRole') === 'technician') ? (
+            {/* Role is sourced exclusively from AuthContext – no localStorage fallback */}
+            {isAuthenticated && user?.role === 'technician' ? (
               <>
                 <Link to="/technician-dashboard" className="text-blue-600 font-bold hover:text-blue-800">Job Feed</Link>
                 <Link to="/my-jobs" className="text-gray-600 hover:text-blue-600 font-medium">My Accepted Jobs</Link>
@@ -96,18 +96,19 @@ function App() {
                 <ProfilePage />
               </ProtectedRoute>
             } />
+            {/* Technician-only routes – customers are redirected to '/' */}
             <Route path="/technician" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['technician']}>
                 <TechnicianDashboard />
               </ProtectedRoute>
             } />
             <Route path="/technician-dashboard" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['technician']}>
                 <TechnicianDashboard />
               </ProtectedRoute>
             } />
             <Route path="/my-jobs" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['technician']}>
                 <TechnicianJobs />
               </ProtectedRoute>
             } />
