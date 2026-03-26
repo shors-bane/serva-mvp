@@ -3,98 +3,146 @@
  *
  * Request-body validation middleware for POST /api/v1/bookings.
  *
- * Uses Zod for schema definition because it is TypeScript-native,
- * has excellent tree-shakeable refinements, and generates very clear
- * error messages without requiring a separate "yup"/"joi" adapter.
+ * ⚠️  FormData reality check
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The BookingWizard sends multipart/form-data, which means:
  *
- * If you prefer Joi, swap the schema definition – the middleware wrapper
- * pattern stays identical.
+ *   1. Every value arrives as a STRING – even numbers, booleans and dates.
+ *      Use z.coerce or plain z.string() for everything; never expect a Date
+ *      object or a number unless you coerce it first.
  *
- * NOTE: `zod` must be installed: npm install zod  (in /server)
+ *   2. Omitted fields may arrive as the literal string "undefined" or as an
+ *      absent key.  We normalise both cases before Zod sees the body.
+ *
+ *   3. FormData cannot send `undefined` – so we cannot use z.undefined() to
+ *      block client-injected fields.  Instead we strip them post-parse.
+ *
+ * Actual fields sent by BookingWizard.js (as of this version):
+ *   deviceType | issue | preferredTime | address
+ *   customIssueDescription? | photo (file, handled by multer before us)
  */
 
 const { z } = require('zod');
 
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+/**
+ * Strips keys whose value is the string "undefined" (a FormData artefact
+ * when JavaScript serialises an undefined variable into a FormData field).
+ */
+const dropFormDataUndefined = (obj) => {
+  const clean = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== 'undefined' && v !== undefined) clean[k] = v;
+  }
+  return clean;
+};
+
 // ─── Booking Schema ───────────────────────────────────────────────────────────
 
 const bookingSchema = z.object({
+  // ── Required fields ────────────────────────────────────────────────────────
+
   deviceType: z
     .string({ required_error: 'Device type is required' })
     .min(2, 'Device type must be at least 2 characters')
-    .max(100, 'Device type must be under 100 characters'),
-
-  brand: z
-    .string({ required_error: 'Brand is required' })
-    .min(1, 'Brand cannot be empty')
-    .max(100, 'Brand must be under 100 characters'),
+    .max(100, 'Device type must be under 100 characters')
+    .transform((v) => v.trim()),
 
   issue: z
     .string({ required_error: 'Issue description is required' })
-    .min(10, 'Please describe the issue in at least 10 characters')
-    .max(1000, 'Issue description must be under 1000 characters'),
+    // min(1) not min(10): the wizard sends short IDs like "battery" or "broken-screen"
+    .min(1, 'Issue is required')
+    .max(1000, 'Issue description must be under 1000 characters')
+    .transform((v) => v.trim()),
+
+  // FormData sends slot strings like "9:00 AM" or "14:00" – not a strict HH:MM
+  // format.  Accept any non-empty string; the wizard already enforces valid slots.
+  preferredTime: z
+    .string({ required_error: 'Preferred time is required' })
+    .min(1, 'Preferred time is required')
+    .max(20, 'Preferred time value is too long'),
 
   address: z
     .string({ required_error: 'Service address is required' })
-    .min(10, 'Address seems too short – please provide a full address')
-    .max(300),
+    .min(5, 'Address seems too short – please provide a full address')
+    .max(300, 'Address must be under 300 characters')
+    .transform((v) => v.trim()),
 
-  // ISO date string or JS-parseable date; must be today or in the future.
-  preferredDate: z
-    .string({ required_error: 'Preferred date is required' })
-    .refine((val) => {
-      const date = new Date(val);
-      return !isNaN(date.getTime()) && date >= new Date(new Date().toDateString());
-    }, 'Preferred date must be today or a future date'),
+  // ── Optional fields ────────────────────────────────────────────────────────
 
-  preferredTime: z
-    .string({ required_error: 'Preferred time is required' })
-    .regex(/^\d{2}:\d{2}$/, 'Preferred time must be in HH:MM format'),
-
-  // Optional fields
+  // brand / model are not collected by the current wizard but may be added later
+  brand: z.string().max(100).optional(),
   model: z.string().max(100).optional(),
+
+  // Free-text elaboration when issue === 'other'
+  customIssueDescription: z.string().max(1000).optional(),
+
   additionalNotes: z.string().max(500).optional(),
 
-  // These are set server-side; reject if the client tries to inject them.
-  status: z.undefined({ errorMap: () => ({ message: 'Field "status" cannot be set by the client' }) }),
-  technician: z.undefined({ errorMap: () => ({ message: 'Field "technician" cannot be set by the client' }) }),
+  // preferredDate is not sent by the current wizard; kept optional for future use
+  preferredDate: z
+    .string()
+    .refine(
+      (val) => {
+        const d = new Date(val);
+        return !isNaN(d.getTime()) && d >= new Date(new Date().toDateString());
+      },
+      'Preferred date must be today or a future date',
+    )
+    .optional(),
+
+  // ── Server-only fields – strip silently rather than reject ─────────────────
+  // Using z.undefined() on a FormData payload causes spurious 400s when an
+  // empty string arrives for these keys.  We accept-and-strip them here, then
+  // overwrite them authoritatively in the route handler.
+  status:     z.string().optional(),
+  technician: z.string().optional(),
 });
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+// ─── Middleware factory ───────────────────────────────────────────────────────
 
 /**
  * validate(schema)
  *
- * Generic Zod validation factory.  Parses req.body against the given schema
- * and calls next() on success, or calls next(err) with a structured error
- * so the global errorHandler picks it up.
+ * Generic Zod validation middleware factory.
  *
- * Keeping the factory generic means any route can reuse it:
  *   router.post('/route', validate(someSchema), handler)
+ *
+ * On success  → replaces req.body with the Zod-parsed output (coerced + stripped).
+ * On failure  → calls next(err) with { statusCode: 400, errors: string[] }
+ *               so the global errorHandler produces the standard JSON shape.
  */
 const validate = (schema) => (req, res, next) => {
-  const result = schema.safeParse(req.body);
+  // Normalise FormData artefacts before schema validation.
+  const rawBody = dropFormDataUndefined(req.body || {});
+
+  const result = schema.safeParse(rawBody);
 
   if (!result.success) {
-    // Map Zod issues into a flat array of human-readable messages.
     const errors = result.error.issues.map((issue) => {
       const field = issue.path.join('.');
+      // Produce messages like "address: Service address is required"
       return field ? `${field}: ${issue.message}` : issue.message;
     });
 
-    // Build an error object that our errorHandler recognises.
     const err = new Error('Validation failed');
     err.statusCode = 400;
-    err.errors = errors;
+    err.errors     = errors;
     return next(err);
   }
 
-  // Replace req.body with the Zod-parsed (stripped + coerced) data
-  // so downstream handlers always receive clean, typed input.
-  req.body = result.data;
+  // Strip server-only fields so the route handler can set them authoritatively
+  // without having to delete them manually.
+  const { status, technician, ...safeBody } = result.data;
+
+  req.body = safeBody; // downstream handler receives only trusted, typed fields
   next();
 };
 
-// Export a ready-to-use middleware for the bookings route.
+// ─── Exports ──────────────────────────────────────────────────────────────────
+
 const validateBooking = validate(bookingSchema);
 
 module.exports = { validateBooking, validate, bookingSchema };
+
