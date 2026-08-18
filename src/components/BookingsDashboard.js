@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import SkeletonLoader from './SkeletonLoader';
 
 const BookingsDashboard = () => {
   const { token } = useAuth();
@@ -51,16 +52,18 @@ const BookingsDashboard = () => {
         alert('Failed to delete booking');
       }
     } catch {
-      // silent – delete errors are non-critical
+      // silent
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
-          <p className="mt-4 text-gray-600">Loading your bookings…</p>
+      <div className="min-h-screen bg-surface p-6 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="font-display font-semibold text-xl text-ink mb-6">Past Bookings</h1>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <SkeletonLoader variant="booking-card" count={3} />
+          </div>
         </div>
       </div>
     );
@@ -68,8 +71,8 @@ const BookingsDashboard = () => {
 
   if (fetchError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-800 text-sm">
+      <div className="min-h-screen bg-surface p-6 md:p-8 flex items-center justify-center">
+        <div className="error-banner">
           <strong>Error:</strong> {fetchError}
         </div>
       </div>
@@ -77,39 +80,45 @@ const BookingsDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Past Bookings</h1>
-        <p className="text-gray-600">View your repair history and digital warranties</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {bookings.map((booking) => (
-          <BookingCard
-            key={booking._id || booking.bookingId}
-            booking={booking}
-            onDelete={handleDelete}
-            renderTechnician={renderTechnician}
-            token={token}
-            apiUrl={API_URL}
-          />
-        ))}
-      </div>
-
-      {bookings.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📋</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No bookings found</h3>
-          <p className="text-gray-600">You haven't made any bookings yet.</p>
+    <div className="min-h-screen bg-surface p-6 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6">
+          <h1 className="font-display font-semibold text-xl text-ink mb-2">Past Bookings</h1>
+          <p className="text-ink-muted">View your repair history and digital warranties</p>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {bookings.map((booking) => (
+            <BookingCard
+              key={booking._id || booking.bookingId}
+              booking={booking}
+              onDelete={handleDelete}
+              renderTechnician={renderTechnician}
+              token={token}
+              apiUrl={API_URL}
+            />
+          ))}
+        </div>
+
+        {bookings.length === 0 && !loading && (
+          <div className="border-2 border-dashed border-edge rounded-sharp py-20 text-center">
+            <div className="flex justify-center mb-4 text-ink-faint">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-ink mb-2">No bookings found</h3>
+            <p className="text-ink-muted">You haven't made any bookings yet.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
-
-// ─── BookingCard ──────────────────────────────────────────────────────────────
-// Each card owns its certificate fetch state so only the clicked card shows
-// a spinner and sibling cards are never forced to re-render.
 
 const BookingCard = ({ booking, onDelete, renderTechnician, token, apiUrl }) => {
   const [isModalOpen,         setIsModalOpen]         = useState(false);
@@ -117,15 +126,13 @@ const BookingCard = ({ booking, onDelete, renderTechnician, token, apiUrl }) => 
   const [isFetching,          setIsFetching]          = useState(false);
   const [certError,           setCertError]           = useState(null);
 
-  // Lazy-load the modal component so its bundle is only parsed on first use.
   const [CertificateModal, setCertificateModal] = useState(null);
   useEffect(() => {
     import('./CertificateModal').then((m) => setCertificateModal(() => m.default));
   }, []);
 
   const handleViewCertificate = async () => {
-    if (isFetching) return; // Guard against double-click
-
+    if (isFetching) return;
     setIsFetching(true);
     setCertError(null);
 
@@ -154,128 +161,116 @@ const BookingCard = ({ booking, onDelete, renderTechnician, token, apiUrl }) => 
     setSelectedCertificate(null);
   };
 
-  const deviceIcon =
-    booking.deviceType?.toLowerCase() === 'smartphone' ? '📱'
-    : booking.deviceType?.toLowerCase() === 'laptop'   ? '💻'
-    : booking.deviceType?.toLowerCase() === 'tablet'   ? '📱'
-    : '🔧';
-
-  const STATUS_STYLES = {
-    pending:       'bg-yellow-100 text-yellow-800',
-    confirmed:     'bg-blue-100 text-blue-800',
-    'in-progress': 'bg-purple-100 text-purple-800',
-    completed:     'bg-green-100 text-green-800',
+  const getDeviceSvg = (type) => {
+    if (type === 'smartphone') {
+      return (
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+          <path d="M12 18h.01" />
+        </svg>
+      );
+    }
+    if (type === 'laptop') {
+      return (
+        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none">
+          <rect x="3" y="4" width="18" height="12" rx="2" ry="2" />
+          <path d="M2 20h20" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none">
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    );
   };
+
+  const statusKey = booking.status?.toLowerCase() || 'pending';
+  const getBadgeClass = (status) => {
+    switch (status) {
+      case 'completed': return 'badge badge-completed';
+      case 'in-progress': return 'badge badge-progress';
+      case 'confirmed': return 'badge badge-confirmed';
+      default: return 'badge badge-pending';
+    }
+  };
+
   const STATUS_LABELS = {
     pending:       'Pending',
     confirmed:     'Confirmed',
     'in-progress': 'In Progress',
     completed:     'Completed',
   };
-  const statusKey   = booking.status?.toLowerCase();
-  const statusClass = STATUS_STYLES[statusKey] || 'bg-gray-100 text-gray-800';
+  
+  const statusClass = getBadgeClass(statusKey);
   const statusText  = STATUS_LABELS[statusKey] || booking.status || 'Pending';
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
-        <div className="p-6">
-
-          {/* ── Card header ─────────────────────────────────────────── */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <span className="text-2xl">{deviceIcon}</span>
-              <div>
-                <h3 className="font-semibold text-gray-900">{booking.bookingId || booking._id}</h3>
-                <p className="text-sm text-gray-600">
-                  {booking.deviceType
-                    ? booking.deviceType.charAt(0).toUpperCase() + booking.deviceType.slice(1)
-                    : 'Unknown Device'}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500">
-                {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : '—'}
-              </div>
-              <div className="text-lg font-semibold text-gray-900">${booking.cost || 0}</div>
-              <button
-                onClick={() => onDelete(booking._id)}
-                className="text-red-500 hover:text-red-700 text-sm font-medium mt-1"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-
-          {/* ── Status badge ─────────────────────────────────────────── */}
-          <div className="mb-4">
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClass}`}>
-              {statusText}
+      <div className="card p-6 hover:border-copper/25 transition-colors">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <span className="text-copper bg-copper/10 px-3 py-1 rounded-sharp flex items-center gap-2 label-mono">
+              {getDeviceSvg(booking.deviceType?.toLowerCase())}
+              {booking.deviceType ? booking.deviceType.toUpperCase() : 'UNKNOWN'}
             </span>
           </div>
-
-          {/* ── Issue ────────────────────────────────────────────────── */}
-          <div className="mb-4">
-            <div className="text-sm font-medium text-gray-700 mb-1">Issue</div>
-            <div className="text-gray-900">{booking.issue || 'No issue specified'}</div>
+          <div className="text-right">
+            <button
+              onClick={() => onDelete(booking._id)}
+              className="text-err hover:text-err/80 text-sm font-medium"
+            >
+              Delete
+            </button>
           </div>
+        </div>
 
-          {/* ── Technician ───────────────────────────────────────────── */}
-          <div className="border-t pt-4 mt-4">
-            <p className="text-xs text-gray-400 uppercase font-semibold mb-1">Technician</p>
-            <span className="text-sm text-gray-700">{renderTechnician(booking.technician)}</span>
+        <div className="mb-2">
+          <div className="font-data text-xs text-ink-faint mb-1">{booking.bookingId || booking._id}</div>
+          <h3 className="font-sans font-medium text-lg text-ink">{booking.issue || 'No issue specified'}</h3>
+        </div>
+
+        <div className="mb-4">
+          <span className={statusClass}>
+            {statusText}
+          </span>
+        </div>
+
+        <div className="space-y-1 mb-4">
+          <div className="text-ink-muted text-sm flex justify-between">
+            <span>Date:</span>
+            <span>{booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : '—'}</span>
           </div>
-
-          {/* ── Actions ──────────────────────────────────────────────── */}
-          <div className="mt-4 pt-4 border-t flex justify-between items-center">
-            <Link to="/track" className="text-blue-600 text-sm hover:underline">
-              Track Status
-            </Link>
-
-            <div className="flex flex-col items-end gap-1">
-              {/*
-                Certificate button – replaces the raw <a href> that dumped JSON
-                in a new tab. Fetches the JSON payload, then opens the modal.
-              */}
-              <button
-                onClick={handleViewCertificate}
-                disabled={isFetching}
-                className={`text-sm font-medium transition-colors ${
-                  isFetching
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-500 hover:text-blue-600'
-                }`}
-              >
-                {isFetching ? (
-                  <span className="flex items-center gap-1">
-                    <svg
-                      className="animate-spin h-3.5 w-3.5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Generating…
-                  </span>
-                ) : (
-                  '🏅 View Certificate'
-                )}
-              </button>
-
-              {/* Inline API error — scoped to this card only */}
-              {certError && (
-                <p className="text-xs text-red-500 max-w-[160px] text-right">{certError}</p>
-              )}
-            </div>
+          <div className="text-ink-muted text-sm flex justify-between">
+            <span>Cost:</span>
+            <span className="font-data text-copper">${booking.cost || 0}</span>
           </div>
+          <div className="border-t border-edge pt-2 mt-2">
+            <p className="text-xs text-ink-faint uppercase font-semibold mb-1">Technician</p>
+            <span className="text-sm text-ink-muted">{renderTechnician(booking.technician)}</span>
+          </div>
+        </div>
 
+        <div className="pt-4 border-t border-edge flex justify-between items-center">
+          <Link to={`/track?id=${booking.bookingId || booking._id}`} className="text-copper text-sm hover:underline">
+            Track Status
+          </Link>
+
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleViewCertificate}
+              disabled={isFetching}
+              className={`btn-ghost text-sm py-1.5 px-3 ${isFetching ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isFetching ? 'Generating…' : 'View Certificate'}
+            </button>
+            {certError && (
+              <p className="text-xs text-err max-w-[160px] text-right">{certError}</p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Modal — rendered next to the card, isolated per-card */}
       {isModalOpen && CertificateModal && selectedCertificate && (
         <CertificateModal certificate={selectedCertificate} onClose={closeModal} />
       )}

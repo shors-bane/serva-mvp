@@ -34,8 +34,6 @@ const TechnicianSignup = () => {
     setError('');
     
     try {
-      // Use AuthContext.register() which handles token persistence and state update.
-      // We pass role: 'technician' so the backend's /register route assigns it correctly.
       const result = await register({
         firstName: formData.firstName,
         lastName:  formData.lastName,
@@ -47,8 +45,6 @@ const TechnicianSignup = () => {
       });
 
       if (result.success) {
-        // AuthContext has already updated state + localStorage token.
-        // navigate() triggers a React Router transition; no page reload needed.
         navigate('/technician-dashboard', { replace: true });
       } else {
         setError(result.error || 'Registration failed. Please try again.');
@@ -61,80 +57,95 @@ const TechnicianSignup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join as Technician</h1>
-          <p className="text-gray-600">Start offering your repair services</p>
+          <h1 className="font-display text-3xl font-bold text-ink mb-2">Join as Technician</h1>
+          <p className="text-ink-muted">Start offering your repair services</p>
         </div>
 
-        {error && <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">{error}</div>}
+        {error && <div className="error-banner p-4 mb-6">{error}</div>}
         
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="card bg-surface-raised border border-edge p-6 space-y-6">
           <div className="grid grid-cols-2 gap-4">
+            <div className="field-group">
+              <input
+                type="text"
+                placeholder="First Name"
+                required
+                className="input-field w-full"
+                onChange={e => setFormData({...formData, firstName: e.target.value})}
+              />
+            </div>
+            <div className="field-group">
+              <input
+                type="text"
+                placeholder="Last Name"
+                required
+                className="input-field w-full"
+                onChange={e => setFormData({...formData, lastName: e.target.value})}
+              />
+            </div>
+          </div>
+          
+          <div className="field-group">
             <input
-              type="text"
-              placeholder="First Name"
+              type="email"
+              placeholder="Email Address"
               required
-              className="p-3 border rounded-lg w-full"
-              onChange={e => setFormData({...formData, firstName: e.target.value})}
-            />
-            <input
-              type="text"
-              placeholder="Last Name"
-              required
-              className="p-3 border rounded-lg w-full"
-              onChange={e => setFormData({...formData, lastName: e.target.value})}
+              className="input-field w-full"
+              onChange={e => setFormData({...formData, email: e.target.value})}
             />
           </div>
           
-          <input
-            type="email"
-            placeholder="Email Address"
-            required
-            className="p-3 border rounded-lg w-full"
-            onChange={e => setFormData({...formData, email: e.target.value})}
-          />
+          <div className="field-group">
+            <input
+              type="tel"
+              placeholder="Phone Number"
+              required
+              className="input-field w-full"
+              onChange={e => setFormData({...formData, phone: e.target.value})}
+            />
+          </div>
           
-          <input
-            type="tel"
-            placeholder="Phone Number"
-            required
-            className="p-3 border rounded-lg w-full"
-            onChange={e => setFormData({...formData, phone: e.target.value})}
-          />
-          
-          <input
-            type="password"
-            placeholder="Password"
-            required
-            className="p-3 border rounded-lg w-full"
-            onChange={e => setFormData({...formData, password: e.target.value})}
-          />
+          <div className="field-group">
+            <input
+              type="password"
+              placeholder="Password"
+              required
+              className="input-field w-full"
+              onChange={e => setFormData({...formData, password: e.target.value})}
+            />
+          </div>
           
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-3">Your Skills</label>
-            <div className="flex flex-wrap gap-2">
-              {availableSkills.map(skill => (
-                <button
-                  key={skill}
-                  type="button"
-                  onClick={() => handleSkillToggle(skill)}
-                  className={`px-4 py-2 rounded-full border transition-all ${
-                    formData.skills.includes(skill)
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
-                  }`}
-                >
-                  {skill}
-                </button>
-              ))}
+            <label className="block text-sm font-bold text-ink-muted mb-3">Your Skills</label>
+            <div className="flex flex-col gap-2">
+              {availableSkills.map(skill => {
+                const isChecked = formData.skills.includes(skill);
+                return (
+                  <label key={skill} className="flex items-center gap-3 cursor-pointer group">
+                    <div className={`w-5 h-5 flex items-center justify-center rounded border transition-colors ${isChecked ? 'bg-copper border-copper' : 'bg-surface-input border-edge group-hover:border-copper/50'}`}>
+                      {isChecked && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                      )}
+                    </div>
+                    <span className="text-ink select-none">{skill}</span>
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={isChecked}
+                      onChange={() => handleSkillToggle(skill)}
+                    />
+                  </label>
+                );
+              })}
             </div>
           </div>
           
           <button
             disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all"
+            className="w-full btn-copper py-4 transition-all"
           >
             {isLoading ? 'Processing...' : 'Apply as Technician'}
           </button>

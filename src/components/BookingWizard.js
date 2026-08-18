@@ -4,11 +4,11 @@ import { useAuth } from '../context/AuthContext';
 
 const BookingWizard = () => {
   const navigate = useNavigate();
-  const { token, logout } = useAuth();    // token from context only – no localStorage fallback
+  const { token, logout } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading]     = useState(false);
-  const [submitError, setSubmitError] = useState(null); // inline error state instead of alert()
-  const [diagnosis, setDiagnosis]     = useState(null); // AI analysis result from step 3
+  const [submitError, setSubmitError] = useState(null);
+  const [diagnosis, setDiagnosis]     = useState(null);
   const [bookingData, setBookingData] = useState({
     deviceType: '',
     issue: '',
@@ -27,8 +27,22 @@ const BookingWizard = () => {
   ];
 
   const deviceTypes = [
-    { id: 'smartphone', name: 'Smartphone', icon: '📱' },
-    { id: 'laptop', name: 'Laptop', icon: '💻' },
+    {
+      id: 'smartphone', name: 'Smartphone', icon: (
+        <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" strokeWidth="1.5" fill="none" className="mx-auto">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+          <path d="M12 18h.01" />
+        </svg>
+      )
+    },
+    {
+      id: 'laptop', name: 'Laptop', icon: (
+        <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" strokeWidth="1.5" fill="none" className="mx-auto">
+          <rect x="3" y="4" width="18" height="12" rx="2" ry="2" />
+          <path d="M2 20h20" />
+        </svg>
+      )
+    },
   ];
 
   const issues = {
@@ -58,15 +72,12 @@ const BookingWizard = () => {
   const handleNext = async () => {
     if (currentStep < steps.length) {
       if (currentStep === 3 && bookingData.photo) {
-        // Show loading, but define a "Safety Valve" to ensure we always proceed
         setIsLoading(true);
-        
         try {
           const formData = new FormData();
           formData.append('photo', bookingData.photo);
           formData.append('deviceType', bookingData.deviceType);
 
-          // Attempt AI, but catch any specific network errors here
           const apiUrl = process.env.REACT_APP_API_URL || 'https://serva-backend.onrender.com';
           const response = await fetch(`${apiUrl}/api/v1/analyze-issue`, {
             method: 'POST',
@@ -82,13 +93,11 @@ const BookingWizard = () => {
         } catch (error) { 
           console.error("AI Service Error (Ignored):", error); 
         } finally { 
-          // CRITICAL: This ensures the user ALWAYS moves to Step 4, even if AI crashed
           setIsLoading(false); 
           setCurrentStep(currentStep + 1); 
         }
         return;
       }
-      
       setCurrentStep(currentStep + 1);
     }
   };
@@ -138,17 +147,14 @@ const BookingWizard = () => {
         localStorage.removeItem('bookingStep');
         localStorage.removeItem('bookingData');
 
-        // Reset wizard state
         setCurrentStep(1);
         setBookingData({ deviceType: '', issue: '', customIssueDescription: '', photo: null, preferredTime: '', address: '' });
 
-        navigate(trackingId ? `/track?id=${trackingId}` : '/bookings');
+        navigate(trackingId ? `/success` : '/bookings', { state: { bookingData: { bookingId: trackingId, deviceType: bookingData.deviceType, issue: bookingData.issue, preferredTime: bookingData.preferredTime } } });
 
       } else if (response.status === 401 || response.status === 403) {
-        // Token expired / revoked – log out cleanly via AuthContext
         await logout();
         navigate('/login', { replace: true });
-
       } else {
         setSubmitError(result.message || 'Booking failed. Please try again.');
       }
@@ -187,20 +193,20 @@ const BookingWizard = () => {
       case 1:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Select Device Type</h2>
+            <h2 className="font-display text-2xl font-semibold text-ink">Select Device Type</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {deviceTypes.map((device) => (
                 <button
                   key={device.id}
                   onClick={() => handleDeviceTypeSelect(device.id)}
-                  className={`p-6 rounded-lg border-2 transition-all ${
+                  className={`card p-6 text-center transition-all ${
                     bookingData.deviceType === device.id
-                      ? 'border-brand bg-brand bg-opacity-10'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-copper bg-copper/10'
+                      : 'border-edge hover:border-copper/50'
                   }`}
                 >
-                  <div className="text-4xl mb-3">{device.icon}</div>
-                  <div className="font-medium text-gray-900">{device.name}</div>
+                  <div className="mb-3 text-ink">{device.icon}</div>
+                  <div className="font-sans font-medium text-ink">{device.name}</div>
                 </button>
               ))}
             </div>
@@ -210,25 +216,25 @@ const BookingWizard = () => {
       case 2:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Select Issue</h2>
+            <h2 className="font-display text-2xl font-semibold text-ink">Select Issue</h2>
             <div className="space-y-3">
               {issues[bookingData.deviceType]?.map((issue) => (
                 <button
                   key={issue.id}
                   onClick={() => handleIssueSelect(issue.id)}
-                  className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`card w-full p-4 text-left transition-all ${
                     bookingData.issue === issue.id
-                      ? 'border-brand bg-brand bg-opacity-10'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-copper bg-copper/10'
+                      : 'border-edge hover:border-copper/50'
                   }`}
                 >
-                  <div className="font-medium text-gray-900">{issue.name}</div>
+                  <div className="font-sans font-medium text-ink">{issue.name}</div>
                 </button>
               ))}
             </div>
             {bookingData.issue === 'other' && (
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-ink-muted mb-2">
                   Please describe your issue
                 </label>
                 <textarea
@@ -236,7 +242,7 @@ const BookingWizard = () => {
                   onChange={(e) => handleCustomIssueDescriptionChange(e.target.value)}
                   placeholder="Describe the problem with your device in detail..."
                   rows={4}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
+                  className="input-field w-full"
                 />
               </div>
             )}
@@ -246,25 +252,27 @@ const BookingWizard = () => {
       case 3:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Upload Photo of Issue</h2>
+            <h2 className="font-display text-2xl font-semibold text-ink">Upload Photo of Issue</h2>
             {bookingData.photo ? (
               <div className="space-y-4">
                 <div className="relative">
                   <img
                     src={URL.createObjectURL(bookingData.photo)}
                     alt="Issue preview"
-                    className="w-full h-64 object-cover rounded-lg"
+                    className="w-full h-64 object-cover rounded-sharp"
                   />
                   <button
                     onClick={handlePhotoRemove}
-                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
+                    className="absolute top-2 right-2 bg-err text-white p-2 rounded-full hover:bg-err/90"
                   >
-                    ✕
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
                 <button
                   onClick={() => document.getElementById('photo-upload').click()}
-                  className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
+                  className="w-full p-4 border-2 border-dashed border-edge rounded-sharp hover:border-copper/50 text-ink"
                 >
                   Change Photo
                 </button>
@@ -272,11 +280,16 @@ const BookingWizard = () => {
             ) : (
               <div
                 onClick={() => document.getElementById('photo-upload').click()}
-                className="w-full p-12 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 cursor-pointer text-center"
+                className="w-full p-12 border-2 border-dashed border-edge rounded-sharp hover:border-copper/50 cursor-pointer text-center"
               >
-                <div className="text-4xl mb-4">📷</div>
-                <div className="text-gray-600">Click to upload photo</div>
-                <div className="text-sm text-gray-400 mt-2">JPG, PNG up to 10MB</div>
+                <div className="mb-4 flex justify-center text-ink-faint">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </div>
+                <div className="text-ink-muted">Click to upload photo</div>
+                <div className="text-sm text-ink-faint mt-2">JPG, PNG up to 10MB</div>
               </div>
             )}
             <input
@@ -292,26 +305,26 @@ const BookingWizard = () => {
       case 4:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Schedule & Address</h2>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <h2 className="font-display text-2xl font-semibold text-ink">Schedule & Address</h2>
+            <div className="field-group">
+              <label className="block text-sm font-medium text-ink-muted mb-2">
                 Preferred Time
               </label>
               <select
                 value={bookingData.preferredTime}
                 onChange={(e) => setBookingData({ ...bookingData, preferredTime: e.target.value })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
+                className="input-field w-full"
               >
-                <option value="">Select a time slot</option>
+                <option value="" className="bg-surface-elevated text-ink">Select a time slot</option>
                 {timeSlots.map((time) => (
-                  <option key={time} value={time}>
+                  <option key={time} value={time} className="bg-surface-elevated text-ink">
                     {time}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="field-group">
+              <label className="block text-sm font-medium text-ink-muted mb-2">
                 Service Address
               </label>
               <textarea
@@ -319,7 +332,7 @@ const BookingWizard = () => {
                 onChange={(e) => setBookingData({ ...bookingData, address: e.target.value })}
                 placeholder="Enter your complete address"
                 rows={3}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
+                className="input-field w-full"
               />
             </div>
           </div>
@@ -328,17 +341,17 @@ const BookingWizard = () => {
       case 5:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Booking Summary</h2>
-            <div className="bg-gray-50 p-6 rounded-lg space-y-4">
+            <h2 className="font-display text-2xl font-semibold text-ink">Booking Summary</h2>
+            <div className="bg-surface-elevated rounded-sharp p-6 space-y-4">
               <div>
-                <span className="font-medium text-gray-700">Device Type:</span>
-                <span className="ml-2 text-gray-900">
+                <span className="text-ink-muted text-sm">Device Type:</span>
+                <span className="ml-2 text-ink font-medium">
                   {deviceTypes.find(d => d.id === bookingData.deviceType)?.name}
                 </span>
               </div>
               <div>
-                <span className="font-medium text-gray-700">Issue:</span>
-                <span className="ml-2 text-gray-900">
+                <span className="text-ink-muted text-sm">Issue:</span>
+                <span className="ml-2 text-ink font-medium">
                   {bookingData.issue === 'other' 
                     ? `Other: ${bookingData.customIssueDescription || 'Not specified'}`
                     : issues[bookingData.deviceType]?.find(i => i.id === bookingData.issue)?.name
@@ -347,44 +360,45 @@ const BookingWizard = () => {
               </div>
               {bookingData.photo && (
                 <div>
-                  <span className="font-medium text-gray-700">Photo:</span>
-                  <span className="ml-2 text-gray-900">Uploaded</span>
+                  <span className="text-ink-muted text-sm">Photo:</span>
+                  <span className="ml-2 text-ink font-medium">Uploaded</span>
                 </div>
               )}
               <div>
-                <span className="font-medium text-gray-700">Preferred Time:</span>
-                <span className="ml-2 text-gray-900">{bookingData.preferredTime}</span>
+                <span className="text-ink-muted text-sm">Preferred Time:</span>
+                <span className="ml-2 text-ink font-medium">{bookingData.preferredTime}</span>
               </div>
               <div>
-                <span className="font-medium text-gray-700">Address:</span>
-                <span className="ml-2 text-gray-900">{bookingData.address}</span>
+                <span className="text-ink-muted text-sm">Address:</span>
+                <span className="ml-2 text-ink font-medium">{bookingData.address}</span>
               </div>
             </div>
             
-            {/* Inline error display – replaces alert() calls */}
             {submitError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
+              <div className="error-banner">
                 <strong>Error:</strong> {submitError}
               </div>
             )}
             
             {isLoading && (
-              <div className="flex flex-col items-center justify-center p-8 bg-blue-50 rounded-xl border border-blue-100 mb-6">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-                <p className="text-blue-800 font-medium animate-pulse">🤖 Serva AI is analyzing your device...</p>
-                <p className="text-blue-600 text-sm mt-1">Identifying damage and estimating severity</p>
+              <div className="skeleton skeleton-card p-8 flex flex-col items-center justify-center mb-6">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-copper mb-4"></div>
+                <p className="text-copper font-medium animate-pulse">Analyzing your device...</p>
               </div>
             )}
             
             {diagnosis && (
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 my-6 rounded-r-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🤖</span>
-                  <h3 className="font-bold text-blue-800 uppercase text-xs tracking-widest">Serva AI Diagnosis</h3>
+              <div className="glass rounded-panel p-4 mt-4">
+                <div className="flex items-center gap-2 mb-2 text-copper">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+                    <rect x="4" y="8" width="16" height="12" rx="2" ry="2" />
+                  </svg>
+                  <h3 className="font-bold uppercase text-xs tracking-widest">Serva AI Diagnosis</h3>
                 </div>
-                <p className="text-blue-900 font-semibold">{diagnosis.issue}</p>
-                <p className="text-blue-700 text-sm mt-1 italic">"{diagnosis.advice}"</p>
-                <div className="mt-2 inline-block bg-blue-200 text-blue-800 px-2 py-1 rounded text-[10px] font-black uppercase">
+                <p className="text-ink font-semibold">{diagnosis.issue}</p>
+                <p className="text-ink-muted text-sm mt-1 italic">"{diagnosis.advice}"</p>
+                <div className="mt-2 inline-block bg-copper/10 text-copper px-2 py-1 rounded-sharp text-[10px] font-black uppercase">
                   Severity: {diagnosis.severity}
                 </div>
               </div>
@@ -393,7 +407,7 @@ const BookingWizard = () => {
             <button
               onClick={handleSubmit}
               disabled={isLoading}
-              className="w-full bg-brand text-white py-4 rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-copper w-full py-4 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Submitting...' : 'Confirm Booking'}
             </button>
@@ -412,79 +426,86 @@ const BookingWizard = () => {
       case 2:
         return !bookingData.issue || (bookingData.issue === 'other' && !bookingData.customIssueDescription.trim());
       case 3:
-        return false; // Photo is optional
+        return false;
       case 4:
         return !bookingData.preferredTime || !bookingData.address;
       case 5:
-        return true; // No next button on summary
+        return true;
       default:
         return true;
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-      {/* Progress Bar */}
-      <div className="bg-gray-50 px-6 py-4">
-        <div className="flex items-center justify-between">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  currentStep >= step.id
-                    ? 'bg-brand text-white'
-                    : 'bg-gray-200 text-gray-500'
-                }`}
+    <div className="min-h-screen bg-surface p-6 md:p-8">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-surface-raised border border-edge rounded-sharp p-6 mb-8">
+          {/* Progress Bar */}
+          <div className="flex items-center justify-between mb-8 px-4">
+            {steps.map((step, index) => {
+              const isCompleted = currentStep > step.id;
+              const isCurrent = currentStep === step.id;
+              
+              return (
+                <React.Fragment key={step.id}>
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        isCompleted
+                          ? 'bg-copper text-white'
+                          : isCurrent
+                          ? 'bg-copper/20 border-2 border-copper animate-pulse-ring text-copper'
+                          : 'bg-surface-elevated border border-edge text-ink-muted'
+                      }`}
+                    >
+                      {isCompleted ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      ) : (
+                        <span className="text-sm font-medium">{step.id}</span>
+                      )}
+                    </div>
+                    <span className={`text-xs mt-2 font-sans ${isCurrent ? 'text-ink' : 'text-ink-muted'} hidden sm:block`}>
+                      {step.title}
+                    </span>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`flex-1 h-[2px] mx-2 ${
+                      isCompleted ? 'bg-copper' : 'bg-edge'
+                    }`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          {/* Step Content */}
+          <div className="py-2">
+            {renderStepContent()}
+          </div>
+
+          {/* Navigation */}
+          {currentStep < 5 && (
+            <div className="mt-8 pt-6 border-t border-edge flex justify-between">
+              <button
+                onClick={handlePrevious}
+                disabled={currentStep === 1 || isLoading}
+                className={`btn-ghost ${currentStep === 1 || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {step.id}
-              </div>
-              <span className={`ml-2 text-sm ${
-                currentStep >= step.id ? 'text-brand font-medium' : 'text-gray-500'
-              } hidden sm:inline`}>
-                {step.title}
-              </span>
-              {index < steps.length - 1 && (
-                <div className={`w-8 h-0.5 mx-2 ${
-                  currentStep > step.id ? 'bg-brand' : 'bg-gray-200'
-                }`} />
-              )}
+                Previous
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={isNextDisabled() || isLoading}
+                className={`btn-copper ${isNextDisabled() || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isLoading ? 'Analyzing…' : 'Next'}
+              </button>
             </div>
-          ))}
+          )}
         </div>
       </div>
-
-      {/* Step Content */}
-      <div className="p-6 sm:p-8">
-        {renderStepContent()}
-      </div>
-
-      {/* Navigation – also disable Next while AI analysis is in flight on step 3 */}
-      {currentStep < 5 && (
-        <div className="px-6 pb-6 flex justify-between">
-          <button
-            onClick={handlePrevious}
-            disabled={currentStep === 1 || isLoading}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              currentStep === 1 || isLoading
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Previous
-          </button>
-          <button
-            onClick={handleNext}
-            disabled={isNextDisabled() || isLoading}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              isNextDisabled() || isLoading
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-brand text-white hover:bg-opacity-90'
-            }`}
-          >
-            {isLoading ? 'Analyzing…' : 'Next'}
-          </button>
-        </div>
-      )}
     </div>
   );
 };

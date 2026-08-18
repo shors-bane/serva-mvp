@@ -1,16 +1,502 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/*
+ * Serva Design System — index.css
+ * Fonts: Sora (display) + DM Sans (body) + JetBrains Mono (data)
+ * Palette: copper + teal + charcoal + warm cream
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Base Layer ──────────────────────────────────────────────── */
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #f8fafc;
+    text-rendering: optimizeLegibility;
+    background-color: #0E0F11;
+    color: #E8E4E0;
+    overflow-x: clip;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background: rgba(196, 120, 74, 0.3);
+    color: #fff;
+  }
+
+  /* Focus ring — copper accent, 2px offset */
+  :focus-visible {
+    outline: 2px solid #C4784A;
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Sora', system-ui, sans-serif;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img, video {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+  }
+
+  input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  /* Custom scrollbar (subtle) */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0E0F11;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2B2F;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3B3F;
+  }
+}
+
+/* ─── Component Layer ─────────────────────────────────────────── */
+@layer components {
+
+  /* Glass material — subtle frosted panel */
+  .glass {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  /* Primary CTA — copper pill */
+  .btn-copper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: #C4784A;
+    color: #fff;
+    font-family: 'Sora', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 999px;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 0 1px rgba(196, 120, 74, 0.2),
+                0 0 20px rgba(196, 120, 74, 0.18);
+  }
+  .btn-copper:hover {
+    background: #D4895B;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 0 0 1px rgba(196, 120, 74, 0.3),
+                0 0 32px rgba(196, 120, 74, 0.3),
+                0 0 60px rgba(196, 120, 74, 0.12);
+  }
+  .btn-copper:active {
+    transform: scale(0.97);
+  }
+
+  /* Secondary CTA — ghost text */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 24px;
+    color: #E8E4E0;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    transition: all 0.3s ease;
+  }
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+  .btn-ghost:active {
+    transform: scale(0.97);
+  }
+
+  /* Dark button (on warm backgrounds) */
+  .btn-dark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: #1C1C1E;
+    color: #F5EDE4;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 999px;
+    transition: all 0.3s ease;
+  }
+  .btn-dark:hover {
+    background: #2A2A2E;
+  }
+  .btn-dark:active {
+    transform: scale(0.97);
+  }
+
+  /* Muted button (on warm backgrounds) */
+  .btn-muted {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: #E8D9C8;
+    color: #1C1C1E;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 999px;
+    transition: all 0.3s ease;
+  }
+  .btn-muted:hover {
+    background: #CEBA9E;
+  }
+
+  /* Form inputs — dark theme */
+  .input-field {
+    width: 100%;
+    padding: 12px 16px;
+    background: #1A1B1F;
+    border: 1px solid #2A2B2F;
+    border-radius: 4px;
+    color: #E8E4E0;
+    font-size: 15px;
+    transition: border-color 0.2s ease;
+  }
+  .input-field::placeholder {
+    color: #5A5550;
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: #C4784A;
+    box-shadow: 0 0 0 3px rgba(196, 120, 74, 0.15);
+  }
+
+  /* Input with label wrapper */
+  .field-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #9A9590;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Select fix — readable options on dark bg */
+  .input-field option {
+    background: #1E1F23;
+    color: #E8E4E0;
+    padding: 8px;
+  }
+
+  /* Status badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .badge-pending {
+    background: rgba(196, 120, 74, 0.15);
+    color: #D4895B;
+  }
+  .badge-progress {
+    background: rgba(26, 107, 92, 0.15);
+    color: #2D8B6F;
+  }
+  .badge-completed {
+    background: rgba(45, 139, 111, 0.2);
+    color: #2D8B6F;
+  }
+  .badge-confirmed {
+    background: rgba(212, 160, 60, 0.15);
+    color: #D4A03C;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #161719 25%,
+      #1E1F23 50%,
+      #161719 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+  }
+
+  .skeleton-line {
+    height: 14px;
+    margin-bottom: 10px;
+  }
+  .skeleton-line:last-child {
+    width: 60%;
+  }
+
+  .skeleton-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+
+  .skeleton-card {
+    height: 120px;
+    border-radius: 4px;
+  }
+
+  /* Scroll reveal */
+  .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--d, 0s);
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Slide in from right (for feature cards) */
+  .reveal-right {
+    opacity: 0;
+    transform: translateX(64px);
+    transition: opacity 0.7s ease-out,
+                transform 0.7s ease-out;
+    transition-delay: var(--d, 0s);
+  }
+  .reveal-right.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* Card surface */
+  .card {
+    background: #161719;
+    border: 1px solid #2A2B2F;
+    border-radius: 4px;
+    transition: border-color 0.3s ease;
+  }
+  .card:hover {
+    border-color: rgba(196, 120, 74, 0.25);
+  }
+
+  /* Error banner */
+  .error-banner {
+    background: rgba(196, 83, 74, 0.1);
+    border: 1px solid rgba(196, 83, 74, 0.25);
+    border-radius: 4px;
+    padding: 12px 16px;
+    color: #C4534A;
+    font-size: 14px;
+  }
+
+  /* Divider — Drift-style decorative */
+  .divider-dots {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    padding: 32px 0;
+  }
+  .divider-dots::before,
+  .divider-dots::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #E8D9C8;
+    flex-shrink: 0;
+  }
+  .divider-dots .divider-line {
+    flex: 1;
+    height: 2px;
+    background: #E8D9C8;
+  }
+
+  /* Nav link */
+  .nav-link {
+    color: #9A9590;
+    font-size: 14px;
+    font-weight: 400;
+    transition: color 0.2s ease;
+    padding: 8px 0;
+  }
+  .nav-link:hover {
+    color: #E8E4E0;
+  }
+
+  /* Trust avatar ring */
+  .trust-ring {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #28282a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.35s ease;
+  }
+  .trust-ring:hover {
+    transform: translateY(-2px);
+  }
+  .trust-ring .trust-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .trust-ring .trust-inner svg {
+    width: 14px;
+    height: 14px;
+    color: #111;
+  }
+
+  /* Mono label (uppercase small caps) */
+  .label-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 400;
+  }
+}
+
+/* ─── Utility Layer ───────────────────────────────────────────── */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .font-display {
+    font-family: 'Sora', system-ui, sans-serif;
+  }
+
+  .font-data {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Epic Depth System */
+  .depth-0 { z-index: 0; filter: blur(4px); transform: scale(1.1); }
+  .depth-1 { z-index: 10; filter: blur(2px); transform: scale(1.05); }
+  .depth-2 { z-index: 20; filter: blur(0px); transform: scale(1.0); }
+  .depth-3 { z-index: 30; filter: blur(0px); transform: scale(1.0); }
+  .depth-4 { z-index: 40; filter: blur(0px); transform: scale(1.0); }
+  .depth-5 { z-index: 50; filter: blur(0px); transform: scale(1.0); }
+
+  /* Ambient Floating Animations */
+  @keyframes floatA {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50%      { transform: translate(15px, -20px) rotate(4deg); }
+  }
+  @keyframes floatB {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50%      { transform: translate(-15px, 20px) rotate(-4deg); }
+  }
+
+  .float-a { animation: floatA 12s ease-in-out infinite; }
+  .float-b { animation: floatB 14s ease-in-out infinite; }
+
+  /* Split Text utility to hide overflow for line reveals */
+  .split-text-line {
+    overflow: hidden;
+    display: inline-block;
+  }
+  .split-text-word {
+    display: inline-block;
+    will-change: transform, opacity;
+  }
+}
+
+/* ─── Reduced Motion ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-right {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .skeleton {
+    animation: none;
+    background: #1E1F23;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

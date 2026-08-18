@@ -5,7 +5,6 @@ const ProfilePage = () => {
   const { user, logout, token } = useAuth();
   const [stats, setStats] = useState({ totalBookings: 0, activeRepairs: 0 });
 
-  // Fetch simple stats
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -30,28 +29,30 @@ const ProfilePage = () => {
   if (!user) return <div className="p-8">Please log in.</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface">
       <div className="max-w-6xl mx-auto p-8">
         {/* Header Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-          <div className="bg-blue-600 h-32"></div>
+        <div className="bg-surface-raised border border-edge rounded-sharp overflow-hidden mb-8 relative">
+          <div className="h-32 bg-gradient-to-r from-copper/20 to-teal/20"></div>
           <div className="px-8 pb-8 relative">
             <div className="absolute -top-16 left-8">
-              <div className="h-32 w-32 rounded-full border-4 border-white bg-white shadow-md flex items-center justify-center text-5xl font-bold text-blue-600 uppercase">
+              <div className="h-32 w-32 rounded-full border-4 border-surface bg-surface-raised flex items-center justify-center text-5xl font-display font-bold text-copper uppercase">
                 {user.firstName ? user.firstName[0] : 'U'}
               </div>
             </div>
-            <div className="mt-32 flex justify-between items-end">
+            <div className="mt-20 flex justify-between items-end">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{user.firstName} {user.lastName}</h1>
-                <p className="text-gray-500 font-medium">{user.email}</p>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
-                  Member
-                </span>
+                <h1 className="font-display text-3xl font-bold text-ink">{user.firstName} {user.lastName}</h1>
+                <p className="text-ink-muted font-medium">{user.email}</p>
+                <div className="mt-2">
+                  <span className="badge badge-progress inline-flex">
+                    Member
+                  </span>
+                </div>
               </div>
               <button 
                 onClick={logout}
-                className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors"
+                className="btn-ghost border-err/25 text-err hover:bg-err/10 transition-colors"
               >
                 Sign Out
               </button>
@@ -61,48 +62,48 @@ const ProfilePage = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="glass rounded-panel p-6 flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm font-medium">Total Repairs</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalBookings}</p>
+              <p className="text-ink-muted text-sm font-medium">Total Repairs</p>
+              <p className="font-display text-3xl font-bold text-ink mt-1">{stats.totalBookings}</p>
             </div>
-            <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 text-xl">
-              🔧
+            <div className="bg-copper/10 rounded-full w-12 h-12 flex items-center justify-center text-copper">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="glass rounded-panel p-6 flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm font-medium">Active Repairs</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.activeRepairs}</p>
+              <p className="text-ink-muted text-sm font-medium">Active Repairs</p>
+              <p className="font-display text-3xl font-bold text-ink mt-1">{stats.activeRepairs}</p>
             </div>
-            <div className="h-12 w-12 bg-green-50 rounded-full flex items-center justify-center text-green-600 text-xl">
-              🔄
+            <div className="bg-copper/10 rounded-full w-12 h-12 flex items-center justify-center text-copper">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             </div>
           </div>
         </div>
 
         {/* Personal Info */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+        <div className="card p-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Personal Information</h2>
-            <button disabled className="text-gray-400 text-sm font-medium cursor-not-allowed" title="Coming Soon">Edit Profile (Coming Soon)</button>
+            <h2 className="font-display text-xl font-bold text-ink">Personal Information</h2>
+            <button disabled className="text-ink-faint text-sm font-medium cursor-not-allowed" title="Coming Soon">Edit Profile (Coming Soon)</button>
           </div>
           <div className="grid md:grid-cols-2 gap-8">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Full Name</label>
-              <p className="text-gray-900 font-medium">{user.firstName} {user.lastName}</p>
+              <label className="block label-mono text-ink-faint mb-1">Full Name</label>
+              <p className="text-ink font-medium">{user.firstName} {user.lastName}</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Email Address</label>
-              <p className="text-gray-900 font-medium">{user.email}</p>
+              <label className="block label-mono text-ink-faint mb-1">Email Address</label>
+              <p className="text-ink font-medium">{user.email}</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Phone Number</label>
-              <p className="text-gray-900 font-medium">{user.phone || 'No phone number added'}</p>
+              <label className="block label-mono text-ink-faint mb-1">Phone Number</label>
+              <p className="text-ink font-medium">{user.phone || 'No phone number added'}</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Member Since</label>
-              <p className="text-gray-900 font-medium">
+              <label className="block label-mono text-ink-faint mb-1">Member Since</label>
+              <p className="text-ink font-medium">
                 {new Date(user.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </p>
             </div>

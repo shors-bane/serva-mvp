@@ -1,31 +1,94 @@
 /**
- * aiController.js
+ * controllers/aiController.js
  *
- * Controller for the AI device-photo analysis feature.
+ * Serva — AI-Powered Device Diagnosis & Pricing Controller
  *
- * Architecture decisions:
- *  1. Single responsibility: this module ONLY talks to the Gemini API.
- *     Multer file handling stays in the route definition.
- *  2. Graceful degradation is a first-class concern, not an afterthought.
- *     Any failure (missing key, timeout, bad JSON, quota exceeded) produces
- *     a well-typed fallback payload so the frontend can branch on it without
- *     crashing or showing ambiguous error messages.
- *  3. A configurable timeout (AI_TIMEOUT_MS) prevents a slow Gemini network
- *     call from blocking the request indefinitely.
+ * Architecture overview:
+ *
+ *  1. SINGLE RESPONSIBILITY: This module orchestrates two things:
+ *       a) Sending the device photo to Gemini for structured diagnosis.
+ *       b) Passing Gemini's output to the pricingEngine for an INR estimate.
+ *     Multer upload handling stays in the route layer (not here).
+ *
+ *  2. STRICT JSON CONTRACT: Gemini is instructed via a detailed system prompt
+ *     to return ONLY a valid JSON object matching a precise schema. Any markdown
+ *     fences, extra prose, or malformed JSON is stripped/caught safely.
+ *
+ *  3. GRACEFUL DEGRADATION: Every failure path (missing key, timeout, quota,
+ *     SyntaxError from LLM hallucination) produces a typed { success: false,
+ *     fallbackRequired: true } payload so the frontend can switch to manual
+ *     input without crashing.
+ *
+ *  4. CONFIGURABLE TIMEOUT: AI_TIMEOUT_MS prevents a slow Gemini call from
+ *     blocking the Express event loop indefinitely.
  */
 
-const fs           = require('fs');
+'use strict';
+
+const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { calculateEstimate, REPAIR_DICTIONARY } = require('../utils/pricingEngine');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-const GEMINI_MODEL     = process.env.GEMINI_MODEL     || 'gemini-2.5-flash';
-const AI_TIMEOUT_MS    = parseInt(process.env.AI_TIMEOUT_MS, 10) || 15_000; // 15 s
+
+/** Target model. gemini-2.5-flash is optimal: fast, multimodal, cost-effective. */
+const GEMINI_MODEL  = process.env.GEMINI_MODEL  || 'gemini-2.5-flash';
+
+/** Hard ceiling for the full Gemini round-trip (default: 20 s). */
+const AI_TIMEOUT_MS = parseInt(process.env.AI_TIMEOUT_MS, 10) || 20_000;
+
+// ─── System Prompt ────────────────────────────────────────────────────────────
+
+/**
+ * buildSystemPrompt
+ *
+ * Builds the instruction block sent to Gemini as the "system" context.
+ * Including the full list of valid issueCodes as a reference forces Gemini
+ * to pick a code that actually exists in our pricing dictionary — this is
+ * the single most important constraint to prevent hallucinated codes.
+ *
+ * @returns {string}
+ */
+const buildSystemPrompt = () => {
+  // Dynamically generate the valid code list from our single source of truth.
+  const validCodes = Object.keys(REPAIR_DICTIONARY).join(' | ');
+
+  return `
+You are an expert electronics repair diagnostician working for Serva, an Indian repair marketplace.
+
+Your ONLY job is to analyse the device photo provided by the user and return a single, minified, valid JSON object — NO markdown fences, NO explanation text, NO trailing commas, nothing else.
+
+The JSON object MUST conform EXACTLY to this TypeScript schema:
+{
+  "issueCode": string,       // MUST be one of the valid codes listed below
+  "brand": string,           // MUST be EXACTLY one of: "Apple" | "Samsung" | "Android" | "Windows"
+  "estimatedAgeYears": number, // integer or decimal; your best estimate of the device's age in years (e.g. 2, 3.5)
+  "customerExplanation": string // A single, friendly, jargon-free sentence explaining the visible issue to the device owner
+}
+
+VALID issueCodes (choose the SINGLE best match):
+${validCodes}
+
+Rules:
+1. If you cannot determine the brand, default to "Android" for phones/tablets or "Windows" for laptops.
+2. If no specific issue code matches, use "GENERAL_DIAGNOSIS".
+3. estimatedAgeYears must be a positive number. If uncertain, use 2.
+4. customerExplanation must be in plain English, friendly, and start with "It looks like…".
+5. Output ONLY the raw JSON object. Any other output will break the production system.
+  `.trim();
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Wraps a promise with a timeout race.
- * Rejects with a named TimeoutError so we can distinguish it in the catch.
+ * withTimeout
+ *
+ * Races a promise against a timeout. Rejects with a named TimeoutError so
+ * the catch block can distinguish it from other failure modes.
+ *
+ * @param {Promise<any>} promise
+ * @param {number}       ms
+ * @returns {Promise<any>}
  */
 const withTimeout = (promise, ms) =>
   Promise.race([
@@ -36,15 +99,53 @@ const withTimeout = (promise, ms) =>
         err.name = 'TimeoutError';
         reject(err);
       }, ms);
-      // Ensure the timer does not prevent Node from exiting in tests.
+      // Allow the process to exit cleanly in tests even if this fires.
       if (timer.unref) timer.unref();
     }),
   ]);
 
 /**
- * The standard fallback payload.
- * Returning { success: false, fallbackRequired: true } tells the frontend to
- * switch to manual input mode rather than showing a generic error.
+ * safeParseGeminiJSON
+ *
+ * Gemini sometimes wraps JSON in markdown code fences despite instructions.
+ * This function strips common artefacts and parses safely, returning null
+ * on any failure so the caller can handle it as a fallback case.
+ *
+ * @param {string} rawText
+ * @returns {object|null}
+ */
+const safeParseGeminiJSON = (rawText) => {
+  try {
+    // Strip markdown code fences (```json … ``` or ``` … ```)
+    const cleaned = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
+
+    const parsed = JSON.parse(cleaned);
+
+    // Validate that required keys are present before we trust the object.
+    const requiredKeys = ['issueCode', 'brand', 'estimatedAgeYears', 'customerExplanation'];
+    const hasAllKeys = requiredKeys.every((k) => k in parsed);
+
+    if (!hasAllKeys) {
+      console.warn('[AI] Gemini response missing required keys:', Object.keys(parsed));
+      return null;
+    }
+
+    return parsed;
+  } catch (parseErr) {
+    console.warn('[AI] safeParseGeminiJSON failed:', parseErr.message, '| Raw text:', rawText?.slice(0, 200));
+    return null;
+  }
+};
+
+/**
+ * FALLBACK_PAYLOAD
+ *
+ * Frozen, typed sentinel returned whenever AI or pricing fails.
+ * The frontend contract: check success === false && fallbackRequired === true
+ * → switch to the manual issue-description form.
  */
 const FALLBACK_PAYLOAD = Object.freeze({
   success:          false,
@@ -52,51 +153,86 @@ const FALLBACK_PAYLOAD = Object.freeze({
   message:          'AI analysis unavailable. Please describe the issue manually.',
 });
 
-// ─── Core classify function (pure, testable) ──────────────────────────────────
+// ─── Core Analysis Function (pure, testable, framework-agnostic) ──────────────
 
 /**
- * classifyDeviceImage
+ * analyzeDeviceImage
  *
- * Accepts an image buffer + MIME type and returns a structured diagnosis.
+ * Sends a device image to Gemini, parses the structured diagnosis, and
+ * enriches it with a price estimate from the pricingEngine.
  *
  * @param {Buffer} imageBuffer  - Raw image bytes
- * @param {string} mimeType     - e.g. 'image/jpeg'
- * @returns {Promise<{ issue: string, severity: string, advice: string }>}
- * @throws if the API call fails (caller handles the fallback)
+ * @param {string} mimeType     - e.g. 'image/jpeg' | 'image/png' | 'image/webp'
+ *
+ * @returns {Promise<{
+ *   issueCode:            string,
+ *   brand:                string,
+ *   estimatedAgeYears:    number,
+ *   customerExplanation:  string,
+ *   pricing:              object    // full object from calculateEstimate()
+ * }>}
+ *
+ * @throws {Error} — Any failure: let the controller route it to FALLBACK_PAYLOAD
  */
-const classifyDeviceImage = async (imageBuffer, mimeType) => {
+const analyzeDeviceImage = async (imageBuffer, mimeType) => {
+  // ── Guard: API key must be set in environment ─────────────────────────────
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+    throw new Error('GEMINI_API_KEY is not configured in environment variables');
   }
 
+  // ── Initialise SDK ────────────────────────────────────────────────────────
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    // systemInstruction is the recommended way to inject a persistent system
+    // prompt in the @google/generative-ai ≥ 0.12 SDK.
+    systemInstruction: buildSystemPrompt(),
+  });
 
-  const prompt = `
-    You are an expert electronics repair technician.
-    Analyze this device photo and return ONLY a minified JSON object with these exact keys:
-    {
-      "issue":    "<one-line description of the visible problem>",
-      "severity": "<Low | Moderate | High | Critical>",
-      "advice":   "<recommended next step for the repair technician>"
-    }
-    Do not include markdown fences or any other text.
-  `.trim();
-
-  const imagePart = {
+  // ── Build the multimodal request parts ───────────────────────────────────
+  const userPrompt = 'Please analyse this device photo and return the JSON diagnosis.';
+  const imagePart  = {
     inlineData: {
       data:     imageBuffer.toString('base64'),
       mimeType,
     },
   };
 
+  // ── Call Gemini with a timeout guard ──────────────────────────────────────
   const result = await withTimeout(
-    model.generateContent([prompt, imagePart]),
+    model.generateContent([userPrompt, imagePart]),
     AI_TIMEOUT_MS,
   );
 
-  const rawText = result.response.text().replace(/```json|```/g, '').trim();
-  return JSON.parse(rawText); // throws SyntaxError if model returns non-JSON
+  const rawText = result.response.text();
+
+  // ── Parse and validate Gemini's response ─────────────────────────────────
+  const diagnosis = safeParseGeminiJSON(rawText);
+  if (!diagnosis) {
+    // safeParseGeminiJSON already logged the warning.
+    throw new Error('Gemini returned an invalid or incomplete JSON response');
+  }
+
+  // ── Destructure with safe defaults ───────────────────────────────────────
+  const {
+    issueCode           = 'GENERAL_DIAGNOSIS',
+    brand               = 'Android',
+    estimatedAgeYears   = 2,
+    customerExplanation = 'The device appears to have an issue that needs technician inspection.',
+  } = diagnosis;
+
+  // ── Calculate price estimate ───────────────────────────────────────────────
+  // calculateEstimate handles unknown issueCodes by falling back to
+  // GENERAL_DIAGNOSIS internally, so this call is always safe.
+  const pricing = calculateEstimate(issueCode, brand, estimatedAgeYears);
+
+  return {
+    issueCode,
+    brand,
+    estimatedAgeYears,
+    customerExplanation,
+    pricing,
+  };
 };
 
 // ─── Express Controller ───────────────────────────────────────────────────────
@@ -104,17 +240,39 @@ const classifyDeviceImage = async (imageBuffer, mimeType) => {
 /**
  * analyzeIssue
  *
- * Express route handler for POST /api/v1/analyze-issue.
+ * Express route handler for POST /api/v1/analyze-issue
  * Expects multer to have placed the uploaded file at req.file.
  *
- * Success:  { success: true,  diagnosis: { issue, severity, advice } }
- * Fallback: { success: false, fallbackRequired: true, message: string }
+ * SUCCESS response shape:
+ * {
+ *   success: true,
+ *   diagnosis: {
+ *     issueCode:           string,
+ *     brand:               string,
+ *     estimatedAgeYears:   number,
+ *     customerExplanation: string,
+ *     pricing: {
+ *       issueCode:       string,
+ *       label:           string,
+ *       brandMultiplier: number,
+ *       ageMultiplier:   number,
+ *       servaMargin:     number,
+ *       estimateMin:     number,
+ *       estimateMax:     number,
+ *       currency:        'INR',
+ *       note:            string
+ *     }
+ *   }
+ * }
  *
- * We deliberately do NOT call next(err) for AI failures – a degraded
- * response is a valid business outcome, not an unhandled server crash.
+ * FALLBACK response:
+ * { success: false, fallbackRequired: true, message: string }
+ *
+ * We deliberately do NOT call next(err) for AI/pricing failures.
+ * A gracefully-degraded response is a valid business outcome, not a 500.
  */
 const analyzeIssue = async (req, res, next) => {
-  // Guard: multer must have processed a file upload.
+  // ── Guard: multer must have processed a file ──────────────────────────────
   if (!req.file) {
     return res.status(400).json({
       success: false,
@@ -122,28 +280,50 @@ const analyzeIssue = async (req, res, next) => {
     });
   }
 
+  let imageBuffer;
+  const mimeType = req.file.mimetype;
+
   try {
-    // Read the uploaded file into a buffer then remove the temp file.
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const mimeType    = req.file.mimetype;
+    // Read bytes from disk then remove the temp file (fire-and-forget).
+    imageBuffer = fs.readFileSync(req.file.path);
+    fs.unlink(req.file.path, (unlinkErr) => {
+      if (unlinkErr) console.warn('[AI] Could not delete temp file:', req.file.path, unlinkErr.message);
+    });
+  } catch (fileErr) {
+    // If we can't even read the upload, log and degrade.
+    console.error('[AI] Failed to read uploaded file:', fileErr.message);
+    return res.json(FALLBACK_PAYLOAD);
+  }
 
-    // Clean up the temp file regardless of AI outcome.
-    fs.unlink(req.file.path, () => {}); // fire-and-forget
+  try {
+    const diagnosis = await analyzeDeviceImage(imageBuffer, mimeType);
 
-    const diagnosis = await classifyDeviceImage(imageBuffer, mimeType);
-
-    return res.json({ success: true, diagnosis });
+    return res.json({
+      success: true,
+      diagnosis,
+    });
 
   } catch (err) {
-    // Log the technical detail server-side for observability.
-    console.error(`[AI] analyzeIssue failed (${err.name}): ${err.message}`);
+    // ── Classify error for better observability ───────────────────────────
+    // All failure modes produce the same graceful fallback; the label helps
+    // with log-based alerting in production.
+    const label =
+      err.name === 'TimeoutError'   ? 'TIMEOUT'   :
+      err.name === 'SyntaxError'    ? 'PARSE_ERR' :
+      err.message.includes('GEMINI_API_KEY') ? 'NO_API_KEY' :
+      'UNKNOWN';
 
-    // SyntaxError → model returned malformed JSON
-    // TimeoutError → Gemini was too slow
-    // Any other  → quota, auth, network, etc.
-    // All cases → degrade gracefully so the booking flow continues.
+    console.error(`[AI] analyzeIssue failed [${label}] (${err.name}): ${err.message}`);
+
     return res.json(FALLBACK_PAYLOAD);
   }
 };
 
-module.exports = { analyzeIssue, classifyDeviceImage, FALLBACK_PAYLOAD };
+// ─── Exports ──────────────────────────────────────────────────────────────────
+
+module.exports = {
+  analyzeIssue,
+  analyzeDeviceImage,   // exported for unit testing without HTTP layer
+  FALLBACK_PAYLOAD,
+  buildSystemPrompt,    // exported so tests can inspect / snapshot the prompt
+};

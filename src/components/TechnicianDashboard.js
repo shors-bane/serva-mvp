@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import SkeletonLoader from './SkeletonLoader';
 
 const TechnicianDashboard = () => {
   const { token } = useAuth();
   const [availableJobs, setAvailableJobs] = useState([]);
   const [isLoading, setIsLoading]         = useState(true);
-  // Track which job IDs are currently being accepted to prevent double-submission.
   const [acceptingIds, setAcceptingIds]   = useState(new Set());
   const [acceptError, setAcceptError]     = useState(null);
 
@@ -28,9 +28,7 @@ const TechnicianDashboard = () => {
   }, [fetchJobs]);
 
   const acceptJob = async (jobId) => {
-    // Guard: do not fire a second request if this job is already being accepted.
     if (acceptingIds.has(jobId)) return;
-
     setAcceptingIds(prev => new Set(prev).add(jobId));
     setAcceptError(null);
 
@@ -41,7 +39,7 @@ const TechnicianDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        fetchJobs(); // Refresh the list
+        fetchJobs(); 
       } else {
         setAcceptError(data.message || 'Failed to accept job.');
       }
@@ -53,49 +51,55 @@ const TechnicianDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto p-8">
-        <h2 className="text-xl font-bold mb-6 text-gray-800">Available Jobs Near You</h2>
+    <div className="min-h-screen bg-surface">
+      <div className="max-w-4xl mx-auto p-6 md:p-8">
+        <h2 className="font-display font-semibold text-xl text-ink mb-6">Available Jobs Near You</h2>
 
-        {/* Inline error for accept failures */}
         {acceptError && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg p-3">
+          <div className="mb-4 error-banner p-3">
             {acceptError}
           </div>
         )}
         
         {isLoading ? (
-          <div className="text-center py-20 text-gray-400">Loading new requests...</div>
+          <div className="space-y-4">
+            <SkeletonLoader variant="booking-card" />
+            <SkeletonLoader variant="booking-card" />
+            <SkeletonLoader variant="booking-card" />
+          </div>
         ) : availableJobs.length === 0 ? (
-          <div className="bg-gray-50 border-2 border-dashed rounded-2xl py-20 text-center">
-            <p className="text-gray-500">No pending jobs in your area. Sit tight!</p>
+          <div className="border-2 border-dashed border-edge rounded-sharp py-20 text-center">
+            <p className="text-ink-muted">No pending jobs in your area. Sit tight!</p>
           </div>
         ) : (
           <div className="grid gap-6">
             {availableJobs.map(job => {
               const isAccepting = acceptingIds.has(job._id);
               return (
-                <div key={job._id} className="bg-white rounded-xl shadow-sm border p-6 flex justify-between items-center hover:shadow-md transition-shadow">
+                <div key={job._id} className="card p-6 flex justify-between items-center hover:border-copper/25 transition-colors">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-md text-xs font-bold uppercase">{job.deviceType}</span>
-                      <span className="text-xs text-gray-400 font-medium">#{job.bookingId}</span>
+                      <span className="label-mono text-copper bg-copper/10 px-3 py-1 rounded-sharp uppercase">{job.deviceType}</span>
+                      <span className="font-data text-xs text-ink-faint">#{job.bookingId}</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800">{job.issue}</h3>
-                    <div className="text-sm text-gray-500">
-                      📍 {job.address} • ⏰ {job.preferredTime}
+                    <h3 className="font-sans font-medium text-lg text-ink">{job.issue}</h3>
+                    <div className="text-ink-muted text-sm flex items-center gap-3">
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        {job.address}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        {job.preferredTime}
+                      </span>
                     </div>
                   </div>
                   <div className="text-right space-y-3">
-                    <p className="text-xl font-black text-gray-900">₹1,500 <span className="text-xs font-normal text-gray-400">est. profit</span></p>
+                    <p className="font-display font-bold text-xl text-ink">₹1,500 <span className="text-ink-faint text-xs font-normal">est. profit</span></p>
                     <button 
                       onClick={() => acceptJob(job._id)}
                       disabled={isAccepting}
-                      className={`px-6 py-2 rounded-lg font-bold transition-colors ${
-                        isAccepting
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                      className={`btn-copper w-full ${isAccepting ? 'opacity-50 cursor-not-allowed bg-surface-elevated text-ink-faint' : ''}`}
                     >
                       {isAccepting ? 'Accepting…' : 'Accept Job'}
                     </button>

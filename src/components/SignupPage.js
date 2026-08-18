@@ -124,20 +124,20 @@ const SignupPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-surface flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Serva</h1>
-          <p className="mt-2 text-gray-600">Create your account</p>
+          <h1 className="font-display text-2xl font-bold text-copper">Serva</h1>
+          <p className="mt-2 text-ink-muted">Create your account</p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-surface-raised py-8 px-4 border border-edge rounded-sharp sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Error Messages */}
             {(error || validationErrors.length > 0) && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="error-banner">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -156,8 +156,8 @@ const SignupPage = () => {
 
             {/* Name Fields */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+              <div className="field-group">
+                <label htmlFor="firstName" className="block text-sm font-medium text-ink-muted">
                   First Name
                 </label>
                 <div className="mt-1">
@@ -168,14 +168,14 @@ const SignupPage = () => {
                     required
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="input-field w-full"
                     placeholder="First name"
                   />
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+              <div className="field-group">
+                <label htmlFor="lastName" className="block text-sm font-medium text-ink-muted">
                   Last Name
                 </label>
                 <div className="mt-1">
@@ -186,7 +186,7 @@ const SignupPage = () => {
                     required
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="input-field w-full"
                     placeholder="Last name"
                   />
                 </div>
@@ -194,8 +194,8 @@ const SignupPage = () => {
             </div>
 
             {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <div className="field-group">
+              <label htmlFor="email" className="block text-sm font-medium text-ink-muted">
                 Email address
               </label>
               <div className="mt-1">
@@ -207,15 +207,15 @@ const SignupPage = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="input-field w-full"
                   placeholder="Enter your email"
                 />
               </div>
             </div>
 
             {/* Phone Field */}
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+            <div className="field-group">
+              <label htmlFor="phone" className="block text-sm font-medium text-ink-muted">
                 Phone Number (Optional)
               </label>
               <div className="mt-1">
@@ -225,15 +225,15 @@ const SignupPage = () => {
                   type="tel"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="input-field w-full"
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
             </div>
 
             {/* Password Fields */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <div className="field-group">
+              <label htmlFor="password" className="block text-sm font-medium text-ink-muted">
                 Password
               </label>
               <div className="mt-1">
@@ -244,17 +244,17 @@ const SignupPage = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="input-field w-full"
                   placeholder="Create a password"
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-ink-faint">
                 Must be at least 6 characters with uppercase, lowercase, and number
               </p>
             </div>
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+            <div className="field-group">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-ink-muted">
                 Confirm Password
               </label>
               <div className="mt-1">
@@ -265,7 +265,7 @@ const SignupPage = () => {
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="input-field w-full"
                   placeholder="Confirm your password"
                 />
               </div>
@@ -276,15 +276,15 @@ const SignupPage = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`w-full flex justify-center py-2 px-4 text-sm font-medium focus:outline-none ${
                   isSubmitting
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
+                    ? 'bg-surface-input text-ink-faint cursor-not-allowed border border-edge rounded-sharp'
+                    : 'btn-copper w-full'
                 }`}
               >
                 {isSubmitting ? (
                   <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -301,28 +301,27 @@ const SignupPage = () => {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-edge" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Already have an account?</span>
+                <span className="px-2 bg-surface-raised text-ink-faint">Already have an account?</span>
               </div>
             </div>
 
             <div className="mt-6">
-              {/* Use Link so HashRouter navigation works; bare <a href> causes full reload */}
               <Link
                 to="/login"
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="btn-ghost w-full flex justify-center py-2 px-4 text-sm font-medium"
               >
                 Sign in instead
               </Link>
             </div>
 
-            <div className="mt-6 text-center border-t pt-4">
-              <p className="text-sm text-gray-600 mb-2">Are you a repair expert?</p>
+            <div className="mt-6 text-center border-t border-edge pt-4">
+              <p className="text-sm text-ink-muted mb-2">Are you a repair expert?</p>
               <Link
                 to="/partner-signup"
-                className="text-blue-600 hover:text-blue-800 font-bold text-sm"
+                className="text-copper hover:text-copper-light font-bold text-sm transition-colors"
               >
                 Apply to Join as a Technician
               </Link>

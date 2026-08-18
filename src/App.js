@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -13,54 +13,121 @@ import SuccessPage from './components/SuccessPage';
 import ProfilePage from './components/ProfilePage';
 import TechnicianSignup from './components/TechnicianSignup';
 import TechnicianJobs from './components/TechnicianJobs';
+import TermsPage from './components/TermsPage';
+import PrivacyPage from './components/PrivacyPage';
+
+// ScrollToTop component ensures page scrolls to top on navigation
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+};
 
 // Navigation component
 const Navigation = () => {
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   
-  // Serva Digital Repair Services - v2.1.3
-  // Last Updated: 2026-02-03 20:15
-  // Don't show navigation on auth pages AND technician signup
-  if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/partner-signup') {
+  // Don't show navigation on auth pages AND technician signup (and homepage, which has its own transparent nav)
+  if (['/login', '/signup', '/partner-signup', '/'].includes(location.pathname)) {
     return null;
   }
 
+  const closeMenu = () => setIsMenuOpen(false);
+
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200">
+    <nav className="bg-void border-b border-edge sticky top-0 z-50 w-full backdrop-blur-md bg-void/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link to="/" className="text-xl font-bold text-brand hover:text-opacity-80 transition-colors">
+            <Link to="/" className="text-xl font-display font-semibold text-copper tracking-tight">
               Serva
             </Link>
           </div>
-          <div className="hidden md:flex space-x-8">
-            {/* Role is sourced exclusively from AuthContext – no localStorage fallback */}
+          
+          {/* Desktop Nav */}
+          <div className="hidden md:flex items-center space-x-6">
             {isAuthenticated && user?.role === 'technician' ? (
               <>
-                {/* Technicians: Job Feed is the primary anchor; no redundant Home link */}
-                <Link to="/technician-dashboard" className="text-blue-600 font-bold hover:text-blue-800">Job Feed</Link>
-                <Link to="/my-jobs" className="text-gray-600 hover:text-blue-600 font-medium">My Accepted Jobs</Link>
+                <Link to="/technician-dashboard" className="nav-link font-medium">Job Feed</Link>
+                <Link to="/my-jobs" className="nav-link font-medium">My Accepted Jobs</Link>
               </>
             ) : (
               <>
-                <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium">Home</Link>
-                <Link to="/book" className="text-gray-600 hover:text-blue-600 font-medium">Book Service</Link>
-                <Link to="/bookings" className="text-gray-600 hover:text-blue-600 font-medium">My Bookings</Link>
-                <Link to="/track" className="text-gray-600 hover:text-blue-600 font-medium">Track Repair</Link>
+                <Link to="/book" className="nav-link font-medium">Book Service</Link>
+                <Link to="/bookings" className="nav-link font-medium">My Bookings</Link>
+                <Link to="/track" className="nav-link font-medium">Track Repair</Link>
               </>
             )}
             
-            {/* Profile Link (Always Visible) */}
-            <Link to="/profile">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+            {/* Profile Link */}
+            {isAuthenticated ? (
+              <Link to="/profile" className="ml-4 flex items-center justify-center w-9 h-9 rounded-full bg-copper/10 border border-copper/30 text-copper font-display font-bold hover:bg-copper/20 transition-colors">
                 {user?.firstName?.charAt(0) || 'U'}
-              </div>
-            </Link>
+              </Link>
+            ) : (
+              <Link to="/login" className="ml-4 glass px-5 py-2 rounded-full text-sm font-medium text-ink hover:bg-white/10 transition-colors">
+                Sign in
+              </Link>
+            )}
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center">
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="glass p-2 rounded-full text-ink focus:outline-none"
+              aria-label="Toggle menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMenuOpen && (
+        <div className="md:hidden absolute top-16 left-0 right-0 bg-surface-raised border-b border-edge shadow-xl z-50">
+          <div className="px-4 py-6 flex flex-col space-y-4">
+            {isAuthenticated && user?.role === 'technician' ? (
+              <>
+                <Link to="/technician-dashboard" onClick={closeMenu} className="text-ink text-lg font-medium">Job Feed</Link>
+                <Link to="/my-jobs" onClick={closeMenu} className="text-ink text-lg font-medium">My Accepted Jobs</Link>
+              </>
+            ) : (
+              <>
+                <Link to="/book" onClick={closeMenu} className="text-ink text-lg font-medium">Book Service</Link>
+                <Link to="/bookings" onClick={closeMenu} className="text-ink text-lg font-medium">My Bookings</Link>
+                <Link to="/track" onClick={closeMenu} className="text-ink text-lg font-medium">Track Repair</Link>
+              </>
+            )}
+            
+            <hr className="border-edge my-2" />
+            
+            {isAuthenticated ? (
+              <Link to="/profile" onClick={closeMenu} className="text-copper font-medium flex items-center gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-copper/10 border border-copper/30 text-copper font-display font-bold">
+                  {user?.firstName?.charAt(0) || 'U'}
+                </div>
+                My Profile
+              </Link>
+            ) : (
+              <Link to="/login" onClick={closeMenu} className="text-copper font-medium">Sign in</Link>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
@@ -69,7 +136,8 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-gray-50 font-sans">
+        <ScrollToTop />
+        <div className="min-h-screen bg-surface text-ink font-sans">
           <Navigation />
           <Routes>
             {/* Public routes */}
@@ -79,6 +147,8 @@ function App() {
             <Route path="/partner-signup" element={<TechnicianSignup />} />
             <Route path="/track" element={<TrackPage />} />
             <Route path="/success" element={<SuccessPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             
             {/* Protected routes */}
             <Route path="/book" element={
